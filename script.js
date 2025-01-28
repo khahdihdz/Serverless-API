@@ -1,6 +1,7 @@
-const CLIENT_ID = "422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com"; // Thay CLIENT_ID của bạn tại đây
+const CLIENT_ID = "422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com";  // Thay CLIENT_ID của bạn tại đây
 const SCOPES = "https://www.googleapis.com/auth/fitness.activity.write";
 
+// Lưu access token
 let accessToken = null;
 
 // Hàm xử lý sự kiện khi người dùng click đăng nhập với Google
@@ -17,6 +18,16 @@ function handleAuthClick() {
             }
         }
     }).requestAccessToken();
+}
+
+// Hàm xử lý đăng xuất
+function handleSignOut() {
+    google.accounts.oauth2.revoke(accessToken, (response) => {
+        accessToken = null;
+        document.getElementById("status").innerText = "❌ Đã đăng xuất";
+        document.getElementById("status").classList.replace("text-success", "text-warning");
+        document.getElementById("hack-btn").disabled = true;
+    });
 }
 
 // Gửi yêu cầu tăng bước chân giả vào Google Fit
@@ -64,4 +75,5 @@ function sendFakeSteps() {
 
 // Thêm sự kiện vào các nút trong HTML
 document.getElementById("login-btn").addEventListener("click", handleAuthClick);
+document.getElementById("signout-btn").addEventListener("click", handleSignOut);
 document.getElementById("hack-btn").addEventListener("click", sendFakeSteps);
