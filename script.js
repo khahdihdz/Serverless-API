@@ -1,4 +1,4 @@
-const CLIENT_ID = "YOUR_CLIENT_ID"; // Thay bằng Client ID từ Google Cloud
+const CLIENT_ID = "422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com"; // Thay bằng Client ID từ Google Cloud
 const SCOPES = "https://www.googleapis.com/auth/fitness.activity.write";
 
 let accessToken = null;
