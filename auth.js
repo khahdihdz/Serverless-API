@@ -6,29 +6,40 @@ function onGoogleLoad() {
         gapi.auth2.init({
             client_id: CLIENT_ID,
             scope: SCOPES
+        }).then(() => {
+            const authInstance = gapi.auth2.getAuthInstance();
+            if (authInstance.isSignedIn.get()) {
+                console.log("Đã đăng nhập trước đó!");
+                updateUI(authInstance.currentUser.get());
+            }
         });
     });
 }
 
 function signIn() {
-    const authInstance = gapi.auth2.getAuthInstance();
-    if (!authInstance) {
-        console.error("Google API chưa được tải!");
-        return;
-    }
-    
-    authInstance.signIn().then(user => {
-        console.log("Đăng nhập thành công!", user);
+    gapi.auth2.getAuthInstance().signIn().then(user => {
+        console.log("Đăng nhập thành công!");
+        localStorage.setItem("googleUser", JSON.stringify(user.getBasicProfile()));
+        updateUI(user);
     }).catch(err => console.error("Lỗi đăng nhập:", err));
 }
 
-function initAuth() {
-    gapi.load('auth2', function() {
-        gapi.auth2.init({
-            client_id: CLIENT_ID,
-            scope: SCOPES
-        });
+function signOut() {
+    gapi.auth2.getAuthInstance().signOut().then(() => {
+        console.log("Đã đăng xuất!");
+        localStorage.removeItem("googleUser");
+        updateUI(null);
     });
 }
 
-window.onload = initAuth;
+function updateUI(user) {
+    if (user) {
+        document.getElementById("userInfo").innerHTML = `Xin chào, ${user.getBasicProfile().getName()}!`;
+        document.getElementById("signInBtn").style.display = "none";
+        document.getElementById("signOutBtn").style.display = "block";
+    } else {
+        document.getElementById("userInfo").innerHTML = "Bạn chưa đăng nhập!";
+        document.getElementById("signInBtn").style.display = "block";
+        document.getElementById("signOutBtn").style.display = "none";
+    }
+}
