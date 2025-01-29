@@ -75,7 +75,7 @@ function fakeSteps() {
 document.getElementById("loginBtn").addEventListener("click", () => {
     gapi.load("client:auth2", () => {
         gapi.auth2.init({
-            client_id: "YOUR_CLIENT_ID.apps.googleusercontent.com", // Đặt Client ID của bạn ở đây
+            client_id: "422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com", // Đặt Client ID của bạn ở đây
         }).then(() => {
             authenticate();
         });
