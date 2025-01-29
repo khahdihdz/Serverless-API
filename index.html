@@ -4,129 +4,162 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hack Fit</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            background-color: #f0f8ff;
-            color: #333;
+            background-color: #f4f7fa;
         }
         .container {
-            max-width: 600px;
             margin-top: 50px;
         }
-        .alert {
-            font-size: 16px;
+        #status {
+            margin-top: 20px;
+        }
+        .input-group {
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="text-center mb-4">Hack Fit - Nhập Số Bước Chân</h1>
-        <div id="status" class="alert alert-info text-center">
-            Vui lòng đăng nhập vào tài khoản Google Fit.
+        <h1 class="text-center">Hack Fit - Google Fit Step Counter</h1>
+        <div class="row">
+            <div class="col-md-6 offset-md-3">
+                <button id="loginBtn" class="btn btn-primary btn-block" onclick="loginGoogleFit()">Đăng nhập Google</button>
+                <p id="status" class="text-center"></p>
+                <div class="input-group">
+                    <input type="number" class="form-control" id="stepCount" placeholder="Nhập số bước chân" />
+                    <button class="btn btn-success" onclick="sendSteps()">Gửi bước chân</button>
+                </div>
+                <button class="btn btn-warning btn-block" onclick="checkData()">Kiểm tra dữ liệu</button>
+            </div>
         </div>
-        <button class="btn btn-primary btn-block" id="loginBtn">Đăng nhập Google</button>
-        <div class="form-group mt-4">
-            <label for="stepsInput">Nhập số bước chân:</label>
-            <input type="number" id="stepsInput" class="form-control" placeholder="Ví dụ: 10000">
-        </div>
-        <button class="btn btn-success btn-block" id="submitBtn" disabled>Ghi Số Bước Chân</button>
     </div>
-    <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+
     <script>
-        let accessToken = null;
+        let accessToken = null; // Token truy cập từ Google OAuth
 
-        function loadClient() {
-            gapi.client.setApiKey("AIzaSyCDAqPtdamfREUzrgK5f01mUPodtn-8ojY"); // Thay YOUR_API_KEY bằng API Key của bạn
-            return gapi.client.load("https://content.googleapis.com/discovery/v1/apis/fitness/v1/rest")
-                .then(() => {
-                    console.log("Google Fit API loaded successfully.");
-                }, (err) => {
-                    console.error("Error loading Google Fit API", err);
-                });
+        // Hàm đăng nhập Google
+        function loginGoogleFit() {
+            const clientId = "YOUR_CLIENT_ID";  // Thay thế bằng Client ID của bạn
+            const redirectUri = "https://hackfit-beta.vercel.app";  // URL redirect của bạn
+            const scope = "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.activity.read";
+
+            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=token&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${encodeURIComponent(scope)}&state=123`;
+
+            window.location.href = authUrl;
         }
 
-        function authenticate() {
-            return gapi.auth2.getAuthInstance().signIn({ scope: "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.activity.read" })
-                .then((response) => {
-                    accessToken = response.getAuthResponse().access_token;
-                    console.log("Đăng nhập thành công với Access Token:", accessToken);
-                    document.getElementById("status").innerText = "Đã đăng nhập thành công!";
-                    document.getElementById("submitBtn").disabled = false;
-                }, (err) => {
-                    console.error("Lỗi đăng nhập:", err);
-                    document.getElementById("status").innerText = "Lỗi đăng nhập!";
-                    alert("Đăng nhập không thành công. Vui lòng thử lại!");
-                });
-        }
+        // Xử lý lấy token từ URL
+        window.onload = function () {
+            const hash = window.location.hash.substring(1); // Lấy phần hash của URL
+            const params = new URLSearchParams(hash);
 
-        function fakeSteps() {
+            // Lấy token từ URL
+            if (params.has("access_token")) {
+                accessToken = params.get("access_token");
+                console.log("Đăng nhập thành công!");
+                document.getElementById("status").innerText = "✅ Đăng nhập thành công!";
+                window.history.pushState({}, "", "/"); // Dọn dẹp URL sau khi lấy token
+            } else if (params.has("error")) {
+                document.getElementById("status").innerText = "❌ Lỗi đăng nhập: " + params.get("error_description");
+            } else {
+                document.getElementById("status").innerText = "⚠️ Đăng nhập không thành công!";
+            }
+        };
+
+        // Gửi dữ liệu số bước chân vào Google Fit API
+        function sendSteps() {
             if (!accessToken) {
-                alert("Vui lòng đăng nhập trước!");
+                document.getElementById("status").innerText = "⚠️ Vui lòng đăng nhập trước!";
                 return;
             }
 
-            const steps = parseInt(document.getElementById("stepsInput").value) || 10000;
-            const currentTimeMillis = Date.now();
-            const startTimeMillis = currentTimeMillis - 3600000; // Lùi lại 1 giờ
+            const stepCount = document.getElementById("stepCount").value;
 
-            const requestBody = {
-                "name": "session_hack_" + Date.now(),
-                "description": "Fake bước chân",
-                "startTimeMillis": startTimeMillis,
-                "endTimeMillis": currentTimeMillis,
-                "activityType": 8,  // Walking
-                "application": {
-                    "packageName": "com.example.hackfit"
-                },
-                "dataSets": [{
-                    "dataSourceId": "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps",
-                    "point": [{
-                        "startTimeNanos": startTimeMillis * 1e6,
-                        "endTimeNanos": currentTimeMillis * 1e6,
-                        "dataTypeName": "com.google.step_count.delta",
-                        "value": [{ "intVal": steps }]
+            if (!stepCount) {
+                document.getElementById("status").innerText = "⚠️ Vui lòng nhập số bước chân!";
+                return;
+            }
+
+            const apiUrl = "https://www.googleapis.com/fitness/v1/users/me/dataset:insert";
+            const data = {
+                "dataSourceId": "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps",
+                "maxEndTimeNs": (new Date()).getTime() * 1000000, // Thời gian hiện tại (Nano giây)
+                "minStartTimeNs": (new Date()).getTime() * 1000000 - 10000000000, // Thời gian 10 giây trước
+                "point": [{
+                    "startTimeNanos": (new Date()).getTime() * 1000000 - 10000000000,
+                    "endTimeNanos": (new Date()).getTime() * 1000000,
+                    "value": [{
+                        "intVal": parseInt(stepCount)
                     }]
                 }]
             };
 
-            fetch("https://www.googleapis.com/fitness/v1/users/me/sessions", {
+            fetch(apiUrl, {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${accessToken}`,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(data)
             })
             .then(response => response.json())
             .then(data => {
-                console.log("Ghi bước chân:", data);
-                document.getElementById("status").innerText = "✅ Ghi bước chân thành công!";
+                console.log(data);
+                if (data.error) {
+                    document.getElementById("status").innerText = `❌ Lỗi: ${data.error.message}`;
+                } else {
+                    document.getElementById("status").innerText = "✅ Đã ghi dữ liệu bước chân thành công!";
+                }
             })
             .catch(error => {
-                console.error("Lỗi ghi dữ liệu:", error);
-                document.getElementById("status").innerText = "❌ Lỗi ghi dữ liệu!";
+                console.error("Có lỗi xảy ra:", error);
+                document.getElementById("status").innerText = "❌ Lỗi kết nối!";
             });
         }
 
-        document.getElementById("loginBtn").addEventListener("click", () => {
-            gapi.load("client:auth2", () => {
-                gapi.auth2.init({
-                    client_id: "422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com", // Thay YOUR_CLIENT_ID bằng Client ID của bạn
-                }).then(() => {
-                    authenticate();
-                }).catch((err) => {
-                    console.error("Lỗi khởi tạo auth2:", err);
-                    alert("Lỗi khởi tạo đăng nhập, vui lòng thử lại!");
-                });
-            });
-        });
+        // Kiểm tra dữ liệu đã ghi vào Google Fit hay chưa
+        function checkData() {
+            if (!accessToken) {
+                document.getElementById("status").innerText = "⚠️ Vui lòng đăng nhập trước!";
+                return;
+            }
 
-        document.getElementById("submitBtn").addEventListener("click", () => {
-            fakeSteps();
-        });
+            const apiUrl = "https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate";
+            const data = {
+                "aggregateBy": [{
+                    "dataSourceId": "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps"
+                }],
+                "bucketByTime": {
+                    "durationMillis": 86400000 // 1 ngày
+                },
+                "startTimeMillis": (new Date()).getTime() - 86400000, // 24 giờ trước
+                "endTimeMillis": new Date().getTime() // Thời gian hiện tại
+            };
+
+            fetch(apiUrl, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${accessToken}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.bucket && data.bucket.length > 0) {
+                    const steps = data.bucket[0].dataset[0].point.reduce((total, point) => total + point.value[0].intVal, 0);
+                    document.getElementById("status").innerText = `✅ Dữ liệu bước chân: ${steps} bước`;
+                } else {
+                    document.getElementById("status").innerText = "❌ Không có dữ liệu bước chân trong 24 giờ qua!";
+                }
+            })
+            .catch(error => {
+                console.error("Có lỗi xảy ra:", error);
+                document.getElementById("status").innerText = "❌ Lỗi kết nối!";
+            });
+        }
     </script>
 </body>
 </html>
