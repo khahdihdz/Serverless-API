@@ -3,159 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hack Bước Chân Google Fit</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="styles.css" rel="stylesheet">
+    <title>Hack Fit - Fake Steps</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="styles.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
-<body>
-    <div class="container text-center mt-5">
-        <h1>🚀 Hack Bước Chân Google Fit</h1>
-        <p id="status" class="text-warning">Vui lòng đăng nhập để bắt đầu</p>
-        <div id="g-signin2"></div>
-        <button id="signout-btn" class="btn btn-danger mt-2" disabled>Đăng xuất</button>
-        
-        <div class="mt-3">
-            <label for="steps" class="form-label">Chọn số bước chân:</label>
-            <input type="number" id="steps" class="form-control w-50 mx-auto" min="1" value="999999">
-        </div>
+<body class="bg-light">
 
-        <button id="hack-btn" class="btn btn-success mt-2" disabled>Thêm Bước Chân</button>
-        <button id="check-btn" class="btn btn-info mt-2" disabled>Kiểm Tra Dữ Liệu</button>
+<div class="container text-center mt-5">
+    <h2 class="text-primary">🏃 Hack Google Fit Steps 🏃</h2>
+    <p class="text-secondary">Fake bước chân và kiểm tra dữ liệu dễ dàng!</p>
+
+    <button id="loginBtn" class="btn btn-danger mt-3">🔓 Đăng nhập Google Fit</button>
+    
+    <div class="mt-3">
+        <label for="stepsInput" class="form-label">🔢 Nhập số bước chân:</label>
+        <input type="number" id="stepsInput" class="form-control w-50 mx-auto" min="0" value="10000">
+        <button onclick="fakeSteps()" class="btn btn-success mt-2">🚀 Ghi bước chân</button>
     </div>
 
-    <script>
-        const CLIENT_ID = "422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com";  // Thay thế bằng Client ID của bạn
-        const SCOPES = "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.activity.read";
-        let accessToken = null;
+    <div class="mt-3">
+        <button onclick="checkSteps()" class="btn btn-info">📊 Kiểm tra bước chân</button>
+        <p id="status" class="mt-2 text-primary">⏳ Chờ kết quả...</p>
+    </div>
+</div>
 
-        function handleClientLoad() {
-            google.accounts.id.initialize({
-                client_id: CLIENT_ID,
-                callback: handleCredentialResponse,
-                scope: SCOPES
-            });
-            google.accounts.id.prompt(); // Hiển thị hộp thoại chọn tài khoản
-        }
+<script>
+    const CLIENT_ID = "YOUR_CLIENT_ID_HERE";
+    const SCOPES = "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.activity.read";
+    let accessToken = "";
 
-        function handleCredentialResponse(response) {
-            accessToken = response.credential;
-            document.getElementById("status").innerText = "✅ Đã đăng nhập!";
-            document.getElementById("status").classList.replace("text-warning", "text-success");
-            document.getElementById("hack-btn").disabled = false;
-            document.getElementById("check-btn").disabled = false;
-            document.getElementById("signout-btn").disabled = false;
-            console.log("Access Token:", accessToken);
-        }
-
-        function handleSignOut() {
-            google.accounts.id.disableAutoSelect();
-            accessToken = null;
-            document.getElementById("status").innerText = "❌ Đã đăng xuất!";
-            document.getElementById("status").classList.replace("text-success", "text-warning");
-            document.getElementById("hack-btn").disabled = true;
-            document.getElementById("check-btn").disabled = true;
-        }
-
-        function sendFakeSteps() {
-            if (!accessToken) {
-                alert("⚠️ Vui lòng đăng nhập trước!");
-                return;
-            }
-
-            let stepsCount = parseInt(document.getElementById("steps").value);
-            if (stepsCount <= 0) {
-                alert("⚠️ Số bước chân phải lớn hơn 0!");
-                return;
-            }
-
-            const startTimeMillis = new Date().getTime() - 60000; // 1 phút trước
-            const endTimeMillis = new Date().getTime(); // Hiện tại
-            const dataSourceId = "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps";
-
-            const requestBody = {
-                "dataSourceId": dataSourceId,
-                "maxEndTimeNs": endTimeMillis * 1000000,
-                "minStartTimeNs": startTimeMillis * 1000000,
-                "point": [{
-                    "dataTypeName": "com.google.step_count.delta",
-                    "startTimeNanos": startTimeMillis * 1000000,
-                    "endTimeNanos": endTimeMillis * 1000000,
-                    "value": [{ "intVal": stepsCount }]
-                }]
-            };
-
-            fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${dataSourceId}/datasets/${startTimeMillis}-${endTimeMillis}`, {
-                method: "PATCH",
-                headers: {
-                    "Authorization": `Bearer ${accessToken}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(requestBody)
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById("status").innerText = `🎉 Đã thêm ${stepsCount} bước chân!`;
-                document.getElementById("status").classList.replace("text-success", "text-primary");
-                console.log("Thêm bước chân thành công:", data);
-            })
-            .catch(error => {
-                document.getElementById("status").innerText = "❌ Lỗi khi gửi dữ liệu!";
-                document.getElementById("status").classList.replace("text-primary", "text-danger");
-                console.error("Lỗi khi gửi dữ liệu:", error);
-            });
-        }
-
-        function checkSteps() {
-            if (!accessToken) {
-                alert("⚠️ Vui lòng đăng nhập trước!");
-                return;
-            }
-
-            const startTimeMillis = new Date().getTime() - (24 * 60 * 60 * 1000); // 24 giờ trước
-            const endTimeMillis = new Date().getTime(); // Hiện tại
-
-            fetch(`https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${accessToken}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    "aggregateBy": [{
-                        "dataTypeName": "com.google.step_count.delta",
-                        "dataSourceId": "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps"
-                    }],
-                    "bucketByTime": { "durationMillis": 86400000 },
-                    "startTimeMillis": startTimeMillis,
-                    "endTimeMillis": endTimeMillis
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                let steps = 0;
-                if (data.bucket.length > 0 && data.bucket[0].dataset.length > 0) {
-                    let points = data.bucket[0].dataset[0].point;
-                    if (points.length > 0) {
-                        steps = points[0].value[0].intVal;
-                    }
+    function loginGoogle() {
+        google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: (response) => {
+                if (response.access_token) {
+                    accessToken = response.access_token;
+                    document.getElementById("status").innerText = "✅ Đã đăng nhập Google Fit!";
+                } else {
+                    document.getElementById("status").innerText = "❌ Đăng nhập thất bại!";
                 }
+            }
+        }).requestAccessToken();
+    }
 
-                document.getElementById("status").innerText = `📊 Tổng bước chân hôm nay: ${steps}`;
-                document.getElementById("status").classList.replace("text-primary", "text-info");
-                console.log("Dữ liệu đã ghi:", data);
+    document.getElementById("loginBtn").addEventListener("click", loginGoogle);
+
+    function fakeSteps() {
+        if (!accessToken) return alert("⚠️ Vui lòng đăng nhập trước!");
+
+        const steps = parseInt(document.getElementById("stepsInput").value) || 10000;
+        const currentTimeMillis = Date.now();
+        const oneHourMillis = 60 * 60 * 1000;
+        
+        const requestBody = {
+            "dataSourceId": "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps",
+            "maxEndTimeNs": (currentTimeMillis * 1e6).toString(),
+            "minStartTimeNs": ((currentTimeMillis - oneHourMillis) * 1e6).toString(),
+            "point": [{
+                "dataTypeName": "com.google.step_count.delta",
+                "startTimeNanos": ((currentTimeMillis - oneHourMillis) * 1e6).toString(),
+                "endTimeNanos": (currentTimeMillis * 1e6).toString(),
+                "value": [{ "intVal": steps }]
+            }]
+        };
+
+        fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:estimated_steps/datasets", {
+            method: "PATCH",
+            headers: {
+                "Authorization": `Bearer ${accessToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(requestBody)
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log("Ghi bước chân:", data);
+            document.getElementById("status").innerText = "✅ Ghi bước chân thành công!";
+        })
+        .catch(error => {
+            console.error("Lỗi:", error);
+            document.getElementById("status").innerText = "❌ Lỗi ghi dữ liệu!";
+        });
+    }
+
+    function checkSteps() {
+        if (!accessToken) return alert("⚠️ Vui lòng đăng nhập trước!");
+
+        const startTimeMillis = Date.now() - (24 * 60 * 60 * 1000);
+        const endTimeMillis = Date.now();
+
+        fetch("https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${accessToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                "aggregateBy": [{
+                    "dataTypeName": "com.google.step_count.delta",
+                    "dataSourceId": "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps"
+                }],
+                "bucketByTime": { "durationMillis": 86400000 },
+                "startTimeMillis": startTimeMillis,
+                "endTimeMillis": endTimeMillis
             })
-            .catch(error => {
-                document.getElementById("status").innerText = "❌ Lỗi khi kiểm tra dữ liệu!";
-                document.getElementById("status").classList.replace("text-info", "text-danger");
-                console.error("Lỗi khi kiểm tra dữ liệu:", error);
-            });
-        }
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log("Kiểm tra bước chân:", data);
 
-        document.getElementById("signout-btn").addEventListener("click", handleSignOut);
-        document.getElementById("hack-btn").addEventListener("click", sendFakeSteps);
-        document.getElementById("check-btn").addEventListener("click", checkSteps);
-        window.onload = handleClientLoad;
-    </script>
+            let steps = 0;
+            if (data.bucket) {
+                data.bucket.forEach(bucket => {
+                    bucket.dataset.forEach(dataset => {
+                        dataset.point.forEach(point => {
+                            if (point.value && point.value.length > 0) {
+                                steps += point.value[0].intVal || 0;
+                            }
+                        });
+                    });
+                });
+            }
+
+            document.getElementById("status").innerText = `📊 Tổng bước chân: ${steps}`;
+        })
+        .catch(error => {
+            console.error("Lỗi kiểm tra:", error);
+            document.getElementById("status").innerText = "❌ Lỗi khi kiểm tra!";
+        });
+    }
+</script>
+
 </body>
 </html>
