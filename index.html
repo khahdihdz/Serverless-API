@@ -14,6 +14,9 @@
             <p class="lead text-muted">Đăng nhập và ghi lại số bước chân của bạn vào Google Fit</p>
         </div>
 
+        <!-- Thông báo tác vụ -->
+        <div id="task_message" class="alert alert-info" role="alert" style="display:none;"></div>
+
         <!-- Nút đăng nhập -->
         <div class="text-center">
             <button id="authorize_button" class="btn btn-success mb-3">Đăng Nhập</button>
@@ -56,6 +59,7 @@
             }).then(function () {
                 document.getElementById('authorize_button').style.display = 'block';
                 document.getElementById('signout_button').style.display = 'none';
+                showTaskMessage('Bạn đã đăng nhập thành công!', 'success');
             });
         }
 
@@ -64,6 +68,9 @@
             gapi.auth2.getAuthInstance().signIn().then(function () {
                 document.getElementById('authorize_button').style.display = 'none';
                 document.getElementById('signout_button').style.display = 'block';
+                showTaskMessage('Bạn đã đăng nhập thành công!', 'success');
+            }).catch(function(error) {
+                showTaskMessage('Lỗi khi đăng nhập: ' + error.error, 'danger');
             });
         }
 
@@ -85,11 +92,19 @@
 
             request.execute(function (response) {
                 if (response.error) {
-                    alert("Lỗi khi ghi số bước chân: " + response.error.message);
+                    showTaskMessage('Lỗi khi ghi số bước chân: ' + response.error.message, 'danger');
                 } else {
-                    alert("Đã ghi số bước chân thành công!");
+                    showTaskMessage('Đã ghi số bước chân thành công!', 'success');
                 }
             });
+        }
+
+        // Hàm hiển thị thông báo tác vụ
+        function showTaskMessage(message, type) {
+            var taskMessageElement = document.getElementById('task_message');
+            taskMessageElement.style.display = 'block';
+            taskMessageElement.textContent = message;
+            taskMessageElement.className = 'alert alert-' + type;
         }
 
         // Đăng ký sự kiện
@@ -98,14 +113,16 @@
             gapi.auth2.getAuthInstance().signOut();
             document.getElementById('authorize_button').style.display = 'block';
             document.getElementById('signout_button').style.display = 'none';
+            showTaskMessage('Bạn đã đăng xuất.', 'info');
         });
 
         document.getElementById('record_steps_button').addEventListener('click', function () {
             var steps = document.getElementById('steps_input').value;
             if (steps && !isNaN(steps)) {
+                showTaskMessage('Đang ghi số bước chân...', 'info');
                 recordSteps(Number(steps));
             } else {
-                alert("Vui lòng nhập số bước chân hợp lệ.");
+                showTaskMessage("Vui lòng nhập số bước chân hợp lệ.", 'danger');
             }
         });
 
