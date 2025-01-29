@@ -1,7 +1,7 @@
 let accessToken = "";
 
 function loginGoogleFit() {
-    const clientId = "YOUR_CLIENT_ID";
+    const clientId = "422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com";
     const redirectUri = "https://hackfit-beta.vercel.app";
     const scope = "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.activity.read";
     const authUrl = `https://accounts.google.com/o/oauth2/auth?response_type=token&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${encodeURIComponent(scope)}`;
