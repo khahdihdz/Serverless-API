@@ -79,10 +79,10 @@
                         </div>
 
                         <div class="d-grid gap-2">
-                            <button class="btn btn-primary btn-lg mb-3" onclick="saveSteps()" id="saveButton">
+                            <button class="btn btn-primary btn-lg mb-3" onclick="saveSteps()" id="saveButton" disabled>
                                 Lưu Số Bước Chân
                             </button>
-                            <button class="btn btn-outline-primary btn-lg" id="googleFitBtn" onclick="handleAuthClick()">
+                            <button class="btn btn-outline-primary btn-lg" id="googleFitBtn">
                                 Kết Nối Google Fit
                             </button>
                             <button class="btn btn-outline-secondary btn-lg" onclick="readSteps()" id="readStepsBtn" style="display: none;">
@@ -115,184 +115,234 @@
     <script>
         const CLIENT_ID = '422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyCDAqPtdamfREUzrgK5f01mUPodtn-8ojY';
-        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest';
-        const SCOPES = 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write';
 
-        let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
-        let dataSource;
+        let isAuthenticated = false;
+        let accessToken = null;
 
         function showLoading(show) {
             document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
-            document.getElementById('saveButton').disabled = show;
+            document.getElementById('saveButton').disabled = show || !isAuthenticated;
             document.getElementById('googleFitBtn').disabled = show;
             document.getElementById('readStepsBtn').disabled = show;
         }
 
-        async function gapiLoaded() {
-            try {
-                await gapi.client.init({
-                    apiKey: API_KEY,
-                    discoveryDocs: [DISCOVERY_DOC],
-                });
-                gapiInited = true;
-                maybeEnableButtons();
-            } catch (err) {
-                console.error('Error initializing GAPI client:', err);
-                document.getElementById('loginStatus').textContent = 'Lỗi kết nối với Google Fit';
-                document.getElementById('loginStatus').className = 'alert alert-danger';
-            }
+        function updateLoginStatus(status, isError = false) {
+            const statusElement = document.getElementById('loginStatus');
+            statusElement.textContent = status;
+            statusElement.className = `alert alert-${isError ? 'danger' : isAuthenticated ? 'success' : 'info'}`;
         }
 
-        function gisLoaded() {
-            tokenClient = google.accounts.oauth2.initTokenClient({
+        // Khởi tạo Google Sign-In
+        function initializeGoogleSignIn() {
+            google.accounts.id.initialize({
                 client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: '', 
+                callback: handleCredentialResponse,
+                auto_select: false,
+                cancel_on_tap_outside: true
             });
-            gisInited = true;
-            maybeEnableButtons();
+
+            const googleFitBtn = document.getElementById('googleFitBtn');
+            google.accounts.id.renderButton(googleFitBtn, {
+                type: 'standard',
+                size: 'large',
+                text: 'sign_in_with_google',
+                shape: 'rectangular',
+                logo_alignment: 'center',
+                width: googleFitBtn.offsetWidth
+            });
         }
 
-        function maybeEnableButtons() {
-            if (gapiInited && gisInited) {
-                document.getElementById('googleFitBtn').style.display = 'block';
+        // Xử lý phản hồi đăng nhập
+        async function handleCredentialResponse(response) {
+            showLoading(true);
+            try {
+                const result = await fetch('https://oauth2.googleapis.com/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        client_id: CLIENT_ID,
+                        client_secret: 'YOUR_CLIENT_SECRET',
+                        code: response.credential,
+                        grant_type: 'authorization_code',
+                        redirect_uri: window.location.origin
+                    })
+                });
+
+                if (!result.ok) {
+                    throw new Error('Token exchange failed');
+                }
+
+                const data = await result.json();
+                accessToken = data.access_token;
+                isAuthenticated = true;
+                
+                document.getElementById('saveButton').disabled = false;
+                document.getElementById('readStepsBtn').style.display = 'block';
+                updateLoginStatus('Đã đăng nhập thành công');
+                
+                await initializeFitnessAPI();
+                await readSteps();
+            } catch (error) {
+                console.error('Authentication error:', error);
+                updateLoginStatus('Lỗi đăng nhập: ' + error.message, true);
+                isAuthenticated = false;
+            } finally {
+                showLoading(false);
             }
         }
 
-        async function handleAuthClick() {
-            showLoading(true);
+        // Khởi tạo Fitness API
+        async function initializeFitnessAPI() {
             try {
-                tokenClient.callback = async (resp) => {
-                    if (resp.error !== undefined) {
-                        throw resp;
+                const response = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources', {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
                     }
-                    await createDataSource();
-                    document.getElementById('loginStatus').textContent = 'Đã đăng nhập thành công';
-                    document.getElementById('loginStatus').className = 'alert alert-success';
-                    document.getElementById('readStepsBtn').style.display = 'block';
-                    await readSteps();
-                };
-
-                if (gapi.client.getToken() === null) {
-                    tokenClient.requestAccessToken({ prompt: 'consent' });
-                } else {
-                    tokenClient.requestAccessToken({ prompt: '' });
-                }
-            } catch (err) {
-                console.error('Error during auth:', err);
-                document.getElementById('loginStatus').textContent = 'Lỗi đăng nhập';
-                document.getElementById('loginStatus').className = 'alert alert-danger';
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        async function createDataSource() {
-            const dataSourceConfig = {
-                dataStreamName: 'myStepCounter',
-                type: 'derived',
-                application: {
-                    name: 'Step Counter App'
-                },
-                dataType: {
-                    name: 'com.google.step_count.delta',
-                    field: [{
-                        name: 'steps',
-                        format: 'integer'
-                    }]
-                }
-            };
-
-            try {
-                const response = await gapi.client.fitness.users.dataSources.create({
-                    userId: 'me',
-                    resource: dataSourceConfig
                 });
-                dataSource = response.result;
-                console.log('DataSource created:', dataSource);
-            } catch (err) {
-                if (err.status === 409) {
-                    // DataSource already exists, get the existing one
-                    const response = await gapi.client.fitness.users.dataSources.list({
-                        userId: 'me'
-                    });
-                    dataSource = response.result.dataSource.find(
-                        ds => ds.dataStreamName === 'myStepCounter'
-                    );
-                    console.log('Using existing DataSource:', dataSource);
-                } else {
-                    console.error('Error creating DataSource:', err);
-                    throw err;
+
+                if (!response.ok) {
+                    throw new Error('Failed to initialize Fitness API');
                 }
+
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Fitness API initialization error:', error);
+                updateLoginStatus('Lỗi kết nối Google Fit: ' + error.message, true);
+                throw error;
             }
         }
 
+        // Đọc số bước chân
         async function readSteps() {
+            if (!isAuthenticated) {
+                updateLoginStatus('Vui lòng đăng nhập trước', true);
+                return;
+            }
+
             showLoading(true);
             try {
-                const now = new Date();
+                const endTime = new Date();
                 const startTime = new Date();
-                startTime.setDate(now.getDate() - 7);
+                startTime.setDate(endTime.getDate() - 7);
 
-                const request = {
-                    aggregateBy: [{
-                        dataTypeName: 'com.google.step_count.delta',
-                    }],
-                    bucketByTime: { durationMillis: 86400000 },
-                    startTimeMillis: startTime.getTime(),
-                    endTimeMillis: now.getTime(),
-                };
-
-                const response = await gapi.client.fitness.users.dataset.aggregate({
-                    userId: 'me',
-                    resource: request
+                const response = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        aggregateBy: [{
+                            dataTypeName: 'com.google.step_count.delta'
+                        }],
+                        bucketByTime: { durationMillis: 86400000 },
+                        startTimeMillis: startTime.getTime(),
+                        endTimeMillis: endTime.getTime()
+                    })
                 });
 
-                updateHistoryFromGoogleFit(response.result.bucket);
-            } catch (err) {
-                console.error('Error reading steps:', err);
-                alert('Không thể đọc dữ liệu từ Google Fit');
+                if (!response.ok) {
+                    throw new Error('Failed to read step data');
+                }
+
+                const data = await response.json();
+                updateHistoryFromGoogleFit(data.bucket);
+            } catch (error) {
+                console.error('Error reading steps:', error);
+                updateLoginStatus('Lỗi đọc dữ liệu: ' + error.message, true);
             } finally {
                 showLoading(false);
             }
         }
 
-        async function saveStepsToGoogleFit(steps) {
-            if (!dataSource) {
-                await createDataSource();
+        // Lưu số bước chân
+        async function saveSteps() {
+            const steps = document.getElementById('stepInput').value;
+            if (!steps) {
+                alert('Vui lòng nhập số bước chân!');
+                return;
             }
 
-            const endTime = new Date();
-            const startTime = new Date(endTime);
-            startTime.setMinutes(startTime.getMinutes() - 1);
+            if (!isAuthenticated) {
+                updateLoginStatus('Vui lòng đăng nhập trước', true);
+                return;
+            }
 
-            const dataset = {
-                dataSourceId: dataSource.dataStreamId,
-                maxEndTimeNs: endTime.getTime() * 1000000,
-                minStartTimeNs: startTime.getTime() * 1000000,
-                point: [{
-                    dataTypeName: 'com.google.step_count.delta',
-                    endTimeNanos: endTime.getTime() * 1000000,
-                    startTimeNanos: startTime.getTime() * 1000000,
-                    value: [{
-                        intVal: parseInt(steps)
-                    }]
-                }]
-            };
-
+            showLoading(true);
             try {
-                await gapi.client.fitness.users.dataSources.datasets.patch({
-                    userId: 'me',
-                    dataSourceId: dataSource.dataStreamId,
-                    datasetId: `${dataset.minStartTimeNs}-${dataset.maxEndTimeNs}`,
-                    resource: dataset
+                const endTime = new Date();
+                const startTime = new Date(endTime);
+                startTime.setMinutes(startTime.getMinutes() - 1);
+
+                const response = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        dataStreamName: 'myStepCounter',
+                        type: 'raw',
+                        application: {
+                            name: 'Step Counter App'
+                        },
+                        dataType: {
+                            name: 'com.google.step_count.delta',
+                            field: [{
+                                name: 'steps',
+                                format: 'integer'
+                            }]
+                        }
+                    })
                 });
-                return true;
-            } catch (err) {
-                console.error('Error saving steps:', err);
-                throw err;
+
+                if (!response.ok && response.status !== 409) {
+                    throw new Error('Failed to create data source');
+                }
+
+                const dataSource = await response.json();
+                const datasetId = `${startTime.getTime() * 1000000}-${endTime.getTime() * 1000000}`;
+
+                const saveResponse = await fetch(
+                    `https://www.googleapis.com/fitness/v1/users/me/dataSources/${dataSource.dataStreamId}/datasets/${datasetId}`,
+                    {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            dataSourceId: dataSource.dataStreamId,
+                            maxEndTimeNs: endTime.getTime() * 1000000,
+                            minStartTimeNs: startTime.getTime() * 1000000,
+                            point: [{
+                                dataTypeName: 'com.google.step_count.delta',
+                                endTimeNanos: endTime.getTime() * 1000000,
+                                startTimeNanos: startTime.getTime() * 1000000,
+                                value: [{
+                                    intVal: parseInt(steps)
+                                }]
+                            }]
+                        })
+                    }
+                );
+
+                if (!saveResponse.ok) {
+                    throw new Error('Failed to save step data');
+                }
+
+                document.getElementById('stepCount').textContent = steps;
+                document.getElementById('stepInput').value = '';
+                alert('Đã lưu số bước chân thành công!');
+                await readSteps();
+            } catch (error) {
+                console.error('Error saving steps:', error);
+                updateLoginStatus('Lỗi lưu dữ liệu: ' + error.message, true);
+            } finally {
+                showLoading(false);
             }
         }
 
@@ -301,7 +351,7 @@
             historyTable.innerHTML = '';
 
             buckets.forEach(bucket => {
-                if (bucket.dataset[0].point.length > 0) {
+                if (bucket.dataset[0].point && bucket.dataset[0].point.length > 0) {
                     const date = new Date(parseInt(bucket.startTimeMillis)).toLocaleDateString('vi-VN');
                     const steps = bucket.dataset[0].point[0].value[0].intVal;
 
@@ -315,35 +365,14 @@
             });
         }
 
-        async function saveSteps() {
-            const steps = document.getElementById('stepInput').value;
-            if (!steps) {
-                alert('Vui lòng nhập số bước chân!');
-                return;
-            }
-
-            showLoading(true);
-            try {
-                if (gapi.client.getToken() === null) {
-                    alert('Vui lòng đăng nhập vào Google Fit trước!');
-                    return;
-                }
-
-                await saveStepsToGoogleFit(steps);
-                document.getElementById('stepCount').textContent = steps;
-                document.getElementById('stepInput').value = '';
-                alert('Đã lưu số bước chân thành công!');
-                await readSteps();
-            } catch (err) {
-                console.error('Error in saveSteps:', err);
-                alert('Không thể lưu dữ liệu vào Google Fit. Vui lòng thử lại!');
-            } finally {
-                showLoading(false);
-            }
-        }
+        // Khởi tạo ứng dụng
+        window.onload = function() {
+            // Load Google Sign-In API
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.onload = initializeGoogleSignIn;
+            document.body.appendChild(script);
+        };
     </script>
-
-    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </body>
 </html>
