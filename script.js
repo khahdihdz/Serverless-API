@@ -1,59 +1,45 @@
-const CLIENT_ID = "422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com";  // Thay CLIENT_ID của bạn tại đây
-const SCOPES = "https://www.googleapis.com/auth/fitness.activity.write";
+let accessToken = "";
 
-// Lưu access token
-let accessToken = null;
+function loginGoogleFit() {
+    const clientId = "YOUR_CLIENT_ID";
+    const redirectUri = "https://hackfit-beta.vercel.app";
+    const scope = "https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.activity.read";
+    const authUrl = `https://accounts.google.com/o/oauth2/auth?response_type=token&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${encodeURIComponent(scope)}`;
 
-// Hàm xử lý sự kiện khi người dùng click đăng nhập với Google
-function handleAuthClick() {
-    google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (response) => {
-            if (response.access_token) {
-                accessToken = response.access_token;
-                document.getElementById("status").innerText = "✅ Đã đăng nhập";
-                document.getElementById("status").classList.replace("text-warning", "text-success");
-                document.getElementById("hack-btn").disabled = false;
-            }
-        }
-    }).requestAccessToken();
+    window.location.href = authUrl;
 }
 
-// Hàm xử lý đăng xuất
-function handleSignOut() {
-    google.accounts.oauth2.revoke(accessToken, (response) => {
-        accessToken = null;
-        document.getElementById("status").innerText = "❌ Đã đăng xuất";
-        document.getElementById("status").classList.replace("text-success", "text-warning");
-        document.getElementById("hack-btn").disabled = true;
-    });
-}
-
-// Gửi yêu cầu tăng bước chân giả vào Google Fit
-function sendFakeSteps() {
-    if (!accessToken) {
-        alert("⚠️ Vui lòng đăng nhập trước!");
-        return;
+// Lấy token từ URL sau khi đăng nhập
+window.onload = function () {
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    if (params.has("access_token")) {
+        accessToken = params.get("access_token");
+        document.getElementById("status").innerText = "✅ Đăng nhập thành công!";
     }
+};
 
-    const url = "https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate";
+function fakeSteps() {
+    if (!accessToken) return alert("⚠️ Vui lòng đăng nhập trước!");
 
-    const startTime = new Date().getTime() - 60000; // 1 phút trước
-    const endTime = new Date().getTime(); // Hiện tại
+    const steps = parseInt(document.getElementById("stepsInput").value) || 10000;
+    const currentTimeMillis = Date.now();
+    const oneHourMillis = 60 * 60 * 1000;
 
     const requestBody = {
-        "aggregateBy": [{
+        "dataSourceId": "derived:com.google.step_count.delta:com.google.android.gms:merge_step_deltas",
+        "maxEndTimeNs": (currentTimeMillis * 1e6).toString(),
+        "minStartTimeNs": ((currentTimeMillis - oneHourMillis) * 1e6).toString(),
+        "point": [{
             "dataTypeName": "com.google.step_count.delta",
-            "dataSourceId": "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps"
-        }],
-        "bucketByTime": { "durationMillis": 60000 },
-        "startTimeMillis": startTime,
-        "endTimeMillis": endTime
+            "startTimeNanos": ((currentTimeMillis - oneHourMillis) * 1e6).toString(),
+            "endTimeNanos": (currentTimeMillis * 1e6).toString(),
+            "value": [{ "intVal": steps }]
+        }]
     };
 
-    fetch(url, {
-        method: "POST",
+    fetch("https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:merge_step_deltas/datasets", {
+        method: "PATCH",
         headers: {
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json"
@@ -62,18 +48,44 @@ function sendFakeSteps() {
     })
     .then(response => response.json())
     .then(data => {
-        document.getElementById("status").innerText = "🎉 Đã thêm 10,000 bước chân!";
-        document.getElementById("status").classList.replace("text-success", "text-primary");
-        console.log("Đã thêm bước chân giả:", data);
+        console.log("Ghi bước chân:", data);
+        document.getElementById("status").innerText = "✅ Ghi bước chân thành công!";
     })
     .catch(error => {
-        document.getElementById("status").innerText = "❌ Lỗi khi gửi dữ liệu!";
-        document.getElementById("status").classList.replace("text-primary", "text-danger");
-        console.error("Lỗi khi gửi dữ liệu:", error);
+        console.error("Lỗi:", error);
+        document.getElementById("status").innerText = "❌ Lỗi ghi dữ liệu!";
     });
 }
 
-// Thêm sự kiện vào các nút trong HTML
-document.getElementById("login-btn").addEventListener("click", handleAuthClick);
-document.getElementById("signout-btn").addEventListener("click", handleSignOut);
-document.getElementById("hack-btn").addEventListener("click", sendFakeSteps);
+function checkSteps() {
+    if (!accessToken) return alert("⚠️ Vui lòng đăng nhập trước!");
+
+    const startTime = (Date.now() - 24 * 60 * 60 * 1000) * 1e6;  // 24 giờ trước
+    const endTime = Date.now() * 1e6; 
+
+    fetch(`https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate`, {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            aggregateBy: [{
+                dataTypeName: "com.google.step_count.delta"
+            }],
+            bucketByTime: { durationMillis: 86400000 },
+            startTimeMillis: startTime / 1e6,
+            endTimeMillis: endTime / 1e6
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log("Dữ liệu bước chân:", data);
+        const steps = data.bucket[0]?.dataset[0]?.point[0]?.value[0]?.intVal || 0;
+        document.getElementById("status").innerText = `📜 Số bước chân hôm nay: ${steps}`;
+    })
+    .catch(error => {
+        console.error("Lỗi:", error);
+        document.getElementById("status").innerText = "❌ Không tìm thấy dữ liệu!";
+    });
+}
