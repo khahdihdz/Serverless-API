@@ -12,7 +12,7 @@ async function addSteps() {
     }
 
     const accessToken = authInstance.currentUser.get().getAuthResponse().access_token;
-    
+
     const requestBody = {
         dataSourceId: "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps",
         maxEndTimeNs: Date.now() * 1e6,
