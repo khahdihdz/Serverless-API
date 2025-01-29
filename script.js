@@ -1,5 +1,5 @@
-    const CLIENT_ID = 'YOUR_CLIENT_ID'; // Thay bằng Client ID của bạn
-    const API_KEY = 'YOUR_API_KEY'; // Thay bằng API Key của bạn
+    const CLIENT_ID = '422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com'; // Thay bằng Client ID của bạn
+    const API_KEY = 'AIzaSyCDAqPtdamfREUzrgK5f01mUPodtn-8ojY'; // Thay bằng API Key của bạn
     const SCOPES = 'https://www.googleapis.com/auth/fitness.activity.write https://www.googleapis.com/auth/fitness.activity.read';
 
     let accessToken;
