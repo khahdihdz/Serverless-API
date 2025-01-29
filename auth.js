@@ -1,4 +1,5 @@
 const CLIENT_ID = "422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com"; // Thay bằng Client ID của bạn
+
 const SCOPES = "https://www.googleapis.com/auth/fitness.activity.write";
 
 function onGoogleLoad() {
@@ -9,7 +10,6 @@ function onGoogleLoad() {
         }).then(() => {
             const authInstance = gapi.auth2.getAuthInstance();
             if (authInstance.isSignedIn.get()) {
-                console.log("Đã đăng nhập trước đó!");
                 updateUI(authInstance.currentUser.get());
             }
         });
@@ -18,7 +18,6 @@ function onGoogleLoad() {
 
 function signIn() {
     gapi.auth2.getAuthInstance().signIn().then(user => {
-        console.log("Đăng nhập thành công!");
         localStorage.setItem("googleUser", JSON.stringify(user.getBasicProfile()));
         updateUI(user);
     }).catch(err => console.error("Lỗi đăng nhập:", err));
@@ -26,7 +25,6 @@ function signIn() {
 
 function signOut() {
     gapi.auth2.getAuthInstance().signOut().then(() => {
-        console.log("Đã đăng xuất!");
         localStorage.removeItem("googleUser");
         updateUI(null);
     });
