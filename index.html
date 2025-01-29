@@ -55,7 +55,8 @@
         // Hàm khởi tạo xác thực
         function initAuth() {
             gapi.auth2.init({
-                client_id: clientId
+                client_id: clientId,
+                scope: scopes
             }).then(function () {
                 document.getElementById('authorize_button').style.display = 'block';
                 document.getElementById('signout_button').style.display = 'none';
