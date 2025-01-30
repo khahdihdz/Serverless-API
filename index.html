@@ -47,8 +47,7 @@
         }
     </style>
     <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-
+    <script src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
     <div class="container py-5">
@@ -114,13 +113,14 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Thông tin OAuth 2.0
         const CLIENT_ID = '422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyCDAqPtdamfREUzrgK5f01mUPodtn-8ojY';
         const SCOPES = 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write';
 
         let tokenClient;
         let isAuthenticated = false;
+        let gapiInited = false;
+        let gisInited = false;
 
         function showLoading(show) {
             document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
@@ -134,36 +134,47 @@
             statusElement.className = `alert alert-${isError ? 'danger' : isAuthenticated ? 'success' : 'info'}`;
         }
 
-        // Khởi tạo Google API Client
-        function initializeGoogleApi() {
-            gapi.load('client', async () => {
-                try {
-                    await gapi.client.init({
-                        apiKey: API_KEY,
-                        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest']
-                    });
-
-                    tokenClient = google.accounts.oauth2.initTokenClient({
-                        client_id: CLIENT_ID,
-                        scope: SCOPES,
-                        callback: handleAuthResponse
-                    });
-
-                    // Kiểm tra nếu đã có token trong session storage
-                    const savedToken = sessionStorage.getItem('fit_access_token');
-                    if (savedToken) {
-                        gapi.client.setToken({ access_token: savedToken });
-                        isAuthenticated = true;
-                        onAuthenticated();
-                    }
-                } catch (error) {
-                    console.error('Error initializing Google API:', error);
-                    updateLoginStatus('Lỗi khởi tạo: ' + error.message, true);
-                }
-            });
+        // Khởi tạo GAPI
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
         }
 
-        // Xử lý phản hồi xác thực
+        async function initializeGapiClient() {
+            try {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest']
+                });
+                gapiInited = true;
+                maybeEnableButtons();
+            } catch (error) {
+                console.error('Error initializing GAPI client:', error);
+                updateLoginStatus('Lỗi khởi tạo GAPI: ' + error.message, true);
+            }
+        }
+
+        // Khởi tạo Google Identity Services
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: handleAuthResponse
+            });
+            gisInited = true;
+            maybeEnableButtons();
+        }
+
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                const savedToken = sessionStorage.getItem('fit_access_token');
+                if (savedToken) {
+                    gapi.client.setToken({ access_token: savedToken });
+                    isAuthenticated = true;
+                    onAuthenticated();
+                }
+            }
+        }
+
         function handleAuthResponse(response) {
             if (response.error !== undefined) {
                 console.error('Auth error:', response);
@@ -177,7 +188,6 @@
             onAuthenticated();
         }
 
-        // Sau khi xác thực thành công
         async function onAuthenticated() {
             updateLoginStatus('Đã đăng nhập thành công');
             document.getElementById('saveButton').disabled = false;
@@ -185,21 +195,14 @@
             await readSteps();
         }
 
-        // Bắt đầu quá trình đăng nhập
-        function requestAuth() {
+        function handleAuthClick() {
             if (!tokenClient) {
                 updateLoginStatus('Đang khởi tạo...', false);
                 return;
             }
-            
-            if (gapi.client.getToken() === null) {
-                tokenClient.requestAccessToken({ prompt: 'consent' });
-            } else {
-                tokenClient.requestAccessToken({ prompt: '' });
-            }
+            tokenClient.requestAccessToken({ prompt: 'consent' });
         }
 
-        // Đọc số bước chân
         async function readSteps() {
             if (!isAuthenticated) {
                 updateLoginStatus('Vui lòng đăng nhập trước', true);
@@ -243,7 +246,6 @@
             }
         }
 
-        // Lưu số bước chân
         async function saveSteps() {
             const steps = document.getElementById('stepInput').value;
             if (!steps) {
@@ -272,7 +274,6 @@
                     }
                 };
 
-                // Tạo hoặc lấy data source
                 let dataStreamId;
                 try {
                     const response = await gapi.client.fitness.users.dataSources.create({
@@ -282,7 +283,6 @@
                     dataStreamId = response.result.dataStreamId;
                 } catch (error) {
                     if (error.status === 409) {
-                        // Data source đã tồn tại, lấy danh sách để tìm
                         const listResponse = await gapi.client.fitness.users.dataSources.list({
                             userId: 'me'
                         });
@@ -295,7 +295,6 @@
                     }
                 }
 
-                // Lưu dữ liệu
                 const datasetId = `${startTime.getTime() * 1000000}-${endTime.getTime() * 1000000}`;
                 await gapi.client.fitness.users.dataSources.datasets.patch({
                     userId: 'me',
@@ -353,29 +352,19 @@
             });
         }
 
-        // Khởi tạo nút đăng nhập Google
-        function initializeGoogleSignIn() {
-            google.accounts.id.initialize({
-                client_id: CLIENT_ID,
-                callback: tokenClient ? requestAuth : null
-            });
-
-            google.accounts.id.renderButton(
-                document.getElementById('googleFitBtn'),
-                { 
-                    type: 'standard',
-                    theme: 'filled_blue', 
-                    size: 'large',
-                    text: 'signin_with_google',
-                    width: document.getElementById('googleFitBtn').offsetWidth
-                }
-            );
-        }
-
-        // Khởi tạo ứng dụng
         window.onload = function() {
-            initializeGoogleApi();
-            initializeGoogleSignIn();
+            gapiLoaded();
+            
+            const signInButton = document.createElement('button');
+            signInButton.textContent = 'Đăng nhập với Google';
+            signInButton.className = 'btn btn-primary btn-lg mb-3';
+            signInButton.onclick = handleAuthClick;
+            
+            const googleFitBtn = document.getElementById('googleFitBtn');
+            googleFitBtn.innerHTML = '';
+            googleFitBtn.appendChild(signInButton);
+            
+            gisLoaded();
         };
     </script>
 </body>
