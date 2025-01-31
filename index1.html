@@ -124,245 +124,322 @@
 
     <script>
         // Cấu hình thông báo
-        toastr.options = {
-            closeButton: true,
-            progressBar: true,
-            positionClass: "toast-top-right",
-            timeOut: 5000
-        };
+toastr.options = {
+    closeButton: true,
+    progressBar: true,
+    positionClass: "toast-top-right",
+    timeOut: 5000,
+    preventDuplicates: true
+};
 
-        // Cấu hình Google API
-        const CLIENT_ID = '422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com';
-        const API_KEY = 'AIzaSyCDAqPtdamfREUzrgK5f01mUPodtn-8ojY';
-        const SCOPES = 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write';
+// Cấu hình Google API
+const CLIENT_ID = '422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com';
+const API_KEY = 'AIzaSyCDAqPtdamfREUzrgK5f01mUPodtn-8ojY';
+const SCOPES = 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write';
 
-        let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
+// Biến toàn cục
+let tokenClient;
+let gapiInited = false;
+let gisInited = false;
+let isLoading = false;
 
-        // Utility functions
-        function showLoading() {
+// Các hàm tiện ích
+const utils = {
+    showLoading() {
+        if (!isLoading) {
+            isLoading = true;
             document.querySelector('.loading').style.display = 'flex';
         }
+    },
 
-        function hideLoading() {
-            document.querySelector('.loading').style.display = 'none';
-        }
+    hideLoading() {
+        isLoading = false;
+        document.querySelector('.loading').style.display = 'none';
+    },
 
-        function updateStatus(message, type = 'info') {
-            const statusAlert = document.getElementById('status-alert');
-            statusAlert.className = `alert alert-${type}`;
-            statusAlert.textContent = message;
-            statusAlert.classList.remove('d-none');
-        }
+    updateUI(isLoggedIn) {
+        const authorizeBtn = document.getElementById('authorize_button');
+        const signoutBtn = document.getElementById('signout_button');
+        const refreshBtn = document.getElementById('refresh-btn');
+        
+        authorizeBtn.classList.toggle('d-none', isLoggedIn);
+        signoutBtn.classList.toggle('d-none', !isLoggedIn);
+        refreshBtn.classList.toggle('d-none', !isLoggedIn);
+    },
 
-        function formatDateTime(date) {
-            return new Intl.DateTimeFormat('vi-VN', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-            }).format(date);
-        }
+    formatDateTime(date) {
+        return new Intl.DateTimeFormat('vi-VN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        }).format(date);
+    },
 
-        // GAPI initialization
-        function gapiLoaded() {
-            gapi.load('client', initializeGapiClient);
-        }
+    resetStepsDisplay() {
+        document.getElementById('steps-today').innerText = '--';
+        document.getElementById('last-update').innerText = '--';
+        document.getElementById('steps-history').innerHTML = 
+            '<tr><td colspan="3" class="text-center">Chưa có dữ liệu</td></tr>';
+    },
 
-        async function initializeGapiClient() {
-            try {
-                await gapi.client.init({
-                    apiKey: API_KEY,
-                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest'],
-                });
-                gapiInited = true;
-                maybeEnableButtons();
-            } catch (err) {
-                toastr.error('Lỗi khởi tạo Google API');
-                console.error(err);
-            }
-        }
+    calculateCalories(steps) {
+        // Cải thiện công thức tính calo dựa trên nghiên cứu
+        // Trung bình 1 bước đi tiêu thụ khoảng 0.04 calo
+        return Math.round(steps * 0.04);
+    }
+};
 
-        function gisLoaded() {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: '', // Defined later
+// Xử lý khởi tạo Google API
+class GoogleFitAPI {
+    static async init() {
+        try {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest'],
             });
-            gisInited = true;
-            maybeEnableButtons();
+            gapiInited = true;
+            this.maybeEnableButtons();
+        } catch (error) {
+            console.error('Lỗi khởi tạo Google API:', error);
+            toastr.error('Không thể khởi tạo Google API. Vui lòng thử lại sau.');
         }
+    }
 
-        function maybeEnableButtons() {
-            if (gapiInited && gisInited) {
-                document.getElementById('authorize_button').classList.remove('d-none');
+    static initGIS() {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: '', // Được định nghĩa trong handleAuthClick
+        });
+        gisInited = true;
+        this.maybeEnableButtons();
+    }
+
+    static maybeEnableButtons() {
+        if (gapiInited && gisInited) {
+            document.getElementById('authorize_button').classList.remove('d-none');
+        }
+    }
+}
+
+// Xử lý xác thực
+class AuthManager {
+    static handleAuthClick() {
+        utils.showLoading();
+        tokenClient.callback = async (resp) => {
+            if (resp.error !== undefined) {
+                utils.hideLoading();
+                toastr.error('Xác thực thất bại');
+                throw new Error(resp.error);
             }
-        }
-
-        // Auth handling
-        function handleAuthClick() {
-            showLoading();
-            tokenClient.callback = async (resp) => {
-                if (resp.error !== undefined) {
-                    toastr.error('Lỗi xác thực');
-                    hideLoading();
-                    throw (resp);
-                }
-                document.getElementById('authorize_button').classList.add('d-none');
-                document.getElementById('signout_button').classList.remove('d-none');
-                document.getElementById('refresh-btn').classList.remove('d-none');
-                await loadStepsData();
-                await loadStepsHistory();
-                hideLoading();
+            
+            try {
+                utils.updateUI(true);
+                await StepsManager.loadInitialData();
                 toastr.success('Đăng nhập thành công');
-            };
-
-            if (gapi.client.getToken() === null) {
-                tokenClient.requestAccessToken({prompt: 'consent'});
-            } else {
-                tokenClient.requestAccessToken({prompt: ''});
-            }
-        }
-
-        function handleSignoutClick() {
-            const token = gapi.client.getToken();
-            if (token !== null) {
-                google.accounts.oauth2.revoke(token.access_token);
-                gapi.client.setToken('');
-                document.getElementById('authorize_button').classList.remove('d-none');
-                document.getElementById('signout_button').classList.add('d-none');
-                document.getElementById('refresh-btn').classList.add('d-none');
-                document.getElementById('steps-today').innerText = '--';
-                document.getElementById('last-update').innerText = '--';
-                document.getElementById('steps-history').innerHTML = '<tr><td colspan="3" class="text-center">Chưa có dữ liệu</td></tr>';
-                toastr.info('Đã đăng xuất');
-            }
-        }
-
-        // Data operations
-        async function loadStepsData() {
-            showLoading();
-            try {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const tomorrow = new Date(today);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-
-                const request = {
-                    aggregateBy: [{
-                        dataTypeName: 'com.google.step_count.delta',
-                    }],
-                    bucketByTime: { durationMillis: 86400000 },
-                    startTimeMillis: today.getTime(),
-                    endTimeMillis: tomorrow.getTime(),
-                };
-
-                const response = await gapi.client.fitness.users.dataset.aggregate({
-                    userId: 'me',
-                    resource: request
-                });
-
-                const steps = response.result.bucket[0].dataset[0].point[0]?.value[0]?.intVal || 0;
-                document.getElementById('steps-today').innerText = steps.toLocaleString('vi-VN');
-                document.getElementById('last-update').innerText = formatDateTime(new Date());
-                toastr.success('Đã cập nhật dữ liệu bước chân');
-            } catch (err) {
-                toastr.error('Lỗi tải dữ liệu bước chân');
-                console.error(err);
+            } catch (error) {
+                console.error('Lỗi sau khi xác thực:', error);
+                toastr.error('Có lỗi xảy ra sau khi đăng nhập');
             } finally {
-                hideLoading();
+                utils.hideLoading();
             }
+        };
+
+        if (gapi.client.getToken() === null) {
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+        } else {
+            tokenClient.requestAccessToken({ prompt: '' });
         }
+    }
 
-        async function loadStepsHistory() {
-            showLoading();
-            try {
-                const endDate = new Date();
-                endDate.setHours(23, 59, 59, 999);
-                const startDate = new Date();
-                startDate.setDate(startDate.getDate() - 7);
-                startDate.setHours(0, 0, 0, 0);
-
-                const request = {
-                    aggregateBy: [{
-                        dataTypeName: 'com.google.step_count.delta',
-                    }],
-                    bucketByTime: { durationMillis: 86400000 },
-                    startTimeMillis: startDate.getTime(),
-                    endTimeMillis: endDate.getTime(),
-                };
-
-                const response = await gapi.client.fitness.users.dataset.aggregate({
-                    userId: 'me',
-                    resource: request
-                });
-
-                let historyHTML = '';
-                response.result.bucket.forEach(bucket => {
-                    const steps = bucket.dataset[0].point[0]?.value[0]?.intVal || 0;
-                    const date = new Date(parseInt(bucket.startTimeMillis));
-                    const calories = Math.round(steps * 0.04); // Ước tính đơn giản: 1 bước ~ 0.04 calo
-
-                    historyHTML += `
-                        <tr>
-                            <td>${formatDateTime(date)}</td>
-                            <td>${steps.toLocaleString('vi-VN')}</td>
-                            <td>${calories.toLocaleString('vi-VN')}</td>
-                        </tr>
-                    `;
-                });
-
-                document.getElementById('steps-history').innerHTML = historyHTML || '<tr><td colspan="3" class="text-center">Chưa có dữ liệu</td></tr>';
-            } catch (err) {
-                toastr.error('Lỗi tải lịch sử bước chân');
-                console.error(err);
-            } finally {
-                hideLoading();
-            }
+    static handleSignoutClick() {
+        const token = gapi.client.getToken();
+        if (token !== null) {
+            google.accounts.oauth2.revoke(token.access_token);
+            gapi.client.setToken('');
+            utils.updateUI(false);
+            utils.resetStepsDisplay();
+            toastr.info('Đã đăng xuất');
         }
+    }
+}
 
-        async function insertSteps(stepCount, activityTime) {
-            showLoading();
+// Quản lý dữ liệu bước chân
+class StepsManager {
+    static async loadInitialData() {
+        await Promise.all([
+            this.loadStepsData(),
+            this.loadStepsHistory()
+        ]);
+    }
+
+    static async loadStepsData() {
+        utils.showLoading();
+        try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            const response = await this.fetchStepsData(today.getTime(), tomorrow.getTime());
+            const steps = this.extractStepsFromResponse(response);
+            
+            document.getElementById('steps-today').innerText = steps.toLocaleString('vi-VN');
+            document.getElementById('last-update').innerText = utils.formatDateTime(new Date());
+            toastr.success('Đã cập nhật dữ liệu bước chân');
+        } catch (error) {
+            console.error('Lỗi tải dữ liệu bước chân:', error);
+            toastr.error('Không thể tải dữ liệu bước chân');
+        } finally {
+            utils.hideLoading();
+        }
+    }
+
+    static async loadStepsHistory() {
+        utils.showLoading();
+        try {
+            const endDate = new Date();
+            endDate.setHours(23, 59, 59, 999);
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - 7);
+            startDate.setHours(0, 0, 0, 0);
+
+            const response = await this.fetchStepsData(startDate.getTime(), endDate.getTime());
+            const historyHTML = this.generateHistoryHTML(response);
+            
+            document.getElementById('steps-history').innerHTML = historyHTML;
+        } catch (error) {
+            console.error('Lỗi tải lịch sử bước chân:', error);
+            toastr.error('Không thể tải lịch sử bước chân');
+        } finally {
+            utils.hideLoading();
+        }
+    }
+
+    static async insertSteps(stepCount, activityTime) {
+        utils.showLoading();
+        try {
             const startTimeMillis = new Date(activityTime).getTime();
             const endTimeMillis = startTimeMillis + 60000; // Thêm 1 phút
 
-            const dataSet = {
-                dataSourceId: 'raw:com.google.step_count.delta:com.example.fit:web_app',
-                minStartTimeNs: startTimeMillis * 1000000,
-                maxEndTimeNs: endTimeMillis * 1000000,
-                point: [{
-                    startTimeNanos: startTimeMillis * 1000000,
-                    endTimeNanos: endTimeMillis * 1000000,
-                    dataTypeName: 'com.google.step_count.delta',
-                    value: [{
-                        intVal: stepCount
-                    }]
-                }]
-            };
+            const dataSet = this.createStepsDataSet(stepCount, startTimeMillis, endTimeMillis);
+            await this.sendStepsData(dataSet);
 
-            try {
-                await gapi.client.fitness.users.dataSources.datasets.patch({
-                    userId: 'me',
-                    dataSourceId: dataSet.dataSourceId,
-                    datasetId: `${dataSet.minStartTimeNs}-${dataSet.maxEndTimeNs}`,
-                    resource: dataSet
-                });
-
-                toastr.success('Đã thêm dữ liệu bước chân thành công');
-                await loadStepsData();
-                await loadStepsHistory();
-            } catch (err) {
-                toastr.error('Lỗi khi thêm dữ liệu bước chân');
-                console.error(err);
-            } finally {
-                hideLoading();
-            }
+            toastr.success('Đã thêm dữ liệu bước chân thành công');
+            await this.loadInitialData();
+        } catch (error) {
+            console.error('Lỗi khi thêm dữ liệu bước chân:', error);
+            toastr.error('Không thể thêm dữ liệu bước chân');
+        } finally {
+            utils.hideLoading();
         }
+    }
 
-        // Event listeners
-        document.addEventListener('DOMContentLoaded', () => {
-            // Set default activity time to now
-            const now = new Date();
-            now.setMinutes(now.getMinutes() -</antArtifact>
+    // Helper methods
+    static async fetchStepsData(startTimeMillis, endTimeMillis) {
+        const request = {
+            aggregateBy: [{
+                dataTypeName: 'com.google.step_count.delta',
+            }],
+            bucketByTime: { durationMillis: 86400000 },
+            startTimeMillis,
+            endTimeMillis,
+        };
+
+        return await gapi.client.fitness.users.dataset.aggregate({
+            userId: 'me',
+            resource: request
+        });
+    }
+
+    static extractStepsFromResponse(response) {
+        return response.result.bucket[0].dataset[0].point[0]?.value[0]?.intVal || 0;
+    }
+
+    static generateHistoryHTML(response) {
+        let html = '';
+        response.result.bucket.forEach(bucket => {
+            const steps = bucket.dataset[0].point[0]?.value[0]?.intVal || 0;
+            const date = new Date(parseInt(bucket.startTimeMillis));
+            const calories = utils.calculateCalories(steps);
+
+            html += `
+                <tr>
+                    <td>${utils.formatDateTime(date)}</td>
+                    <td>${steps.toLocaleString('vi-VN')}</td>
+                    <td>${calories.toLocaleString('vi-VN')}</td>
+                </tr>
+            `;
+        });
+        return html || '<tr><td colspan="3" class="text-center">Chưa có dữ liệu</td></tr>';
+    }
+
+    static createStepsDataSet(stepCount, startTimeMillis, endTimeMillis) {
+        return {
+            dataSourceId: 'raw:com.google.step_count.delta:com.example.fit:web_app',
+            minStartTimeNs: startTimeMillis * 1000000,
+            maxEndTimeNs: endTimeMillis * 1000000,
+            point: [{
+                startTimeNanos: startTimeMillis * 1000000,
+                endTimeNanos: endTimeMillis * 1000000,
+                dataTypeName: 'com.google.step_count.delta',
+                value: [{
+                    intVal: stepCount
+                }]
+            }]
+        };
+    }
+
+    static async sendStepsData(dataSet) {
+        await gapi.client.fitness.users.dataSources.datasets.patch({
+            userId: 'me',
+            dataSourceId: dataSet.dataSourceId,
+            datasetId: `${dataSet.minStartTimeNs}-${dataSet.maxEndTimeNs}`,
+            resource: dataSet
+        });
+    }
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', () => {
+    // Khởi tạo thời gian mặc định cho form
+    const initDefaultTime = () => {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        document.getElementById('activity-time').value = now.toISOString().slice(0, 16);
+    };
+    initDefaultTime();
+
+    // Gắn các event handlers
+    document.getElementById('authorize_button').addEventListener('click', AuthManager.handleAuthClick);
+    document.getElementById('signout_button').addEventListener('click', AuthManager.handleSignoutClick);
+    document.getElementById('refresh-btn').addEventListener('click', StepsManager.loadInitialData.bind(StepsManager));
+
+    // Form submission handler
+    document.getElementById('add-steps-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const steps = parseInt(document.getElementById('steps').value);
+        const activityTime = document.getElementById('activity-time').value;
+        
+        if (steps && activityTime) {
+            await StepsManager.insertSteps(steps, activityTime);
+            // Reset form
+            document.getElementById('steps').value = '';
+            initDefaultTime();
+        }
+    });
+});
+
+// Callbacks cho Google API
+function gapiLoaded() {
+    gapi.load('client', () => GoogleFitAPI.init());
+}
+
+function gisLoaded() {
+    GoogleFitAPI.initGIS();
+}
+    </script>
+</body>
+</html>
