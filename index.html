@@ -5,26 +5,69 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Theo dõi bước chân Google Fit</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <style>
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
+    <!-- Loading overlay -->
+    <div class="loading">
+        <div class="loading-spinner"></div>
+    </div>
+
     <nav class="navbar navbar-dark bg-primary">
         <div class="container">
             <span class="navbar-brand mb-0 h1">Theo dõi bước chân Google Fit</span>
-            <button id="authorize_button" class="btn btn-light">Đăng nhập</button>
-            <button id="signout_button" class="btn btn-light d-none">Đăng xuất</button>
+            <div>
+                <button id="authorize_button" class="btn btn-light">Đăng nhập</button>
+                <button id="signout_button" class="btn btn-light d-none">Đăng xuất</button>
+            </div>
         </div>
     </nav>
 
     <div class="container mt-4">
+        <!-- Status Alert -->
+        <div id="status-alert" class="alert alert-info d-none" role="alert"></div>
+
         <div class="row">
             <div class="col-md-6">
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">Số bước chân hôm nay</h5>
+                        <button id="refresh-btn" class="btn btn-sm btn-outline-primary d-none">
+                            <i class="bi bi-arrow-clockwise"></i> Làm mới
+                        </button>
                     </div>
                     <div class="card-body">
                         <h2 id="steps-today">--</h2>
+                        <small class="text-muted">Cập nhật lần cuối: <span id="last-update">--</span></small>
                     </div>
                 </div>
             </div>
@@ -37,9 +80,13 @@
                         <form id="add-steps-form">
                             <div class="mb-3">
                                 <label for="steps" class="form-label">Số bước</label>
-                                <input type="number" class="form-control" id="steps" required>
+                                <input type="number" class="form-control" id="steps" min="1" required>
                             </div>
-                            <button type="submit" class="btn btn-primary">Lưu</button>
+                            <div class="mb-3">
+                                <label for="activity-time" class="form-label">Thời gian hoạt động</label>
+                                <input type="datetime-local" class="form-control" id="activity-time" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="submit-btn">Lưu</button>
                         </form>
                     </div>
                 </div>
@@ -50,10 +97,25 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">Lịch sử bước chân</h5>
+                        <h5 class="card-title mb-0">Lịch sử bước chân (7 ngày gần nhất)</h5>
                     </div>
                     <div class="card-body">
-                        <div id="steps-history"></div>
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Ngày</th>
+                                        <th>Số bước</th>
+                                        <th>Calo tiêu thụ (ước tính)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="steps-history">
+                                    <tr>
+                                        <td colspan="3" class="text-center">Chưa có dữ liệu</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -61,37 +123,73 @@
     </div>
 
     <script>
-        // Client ID từ Google Cloud Console
+        // Cấu hình thông báo
+        toastr.options = {
+            closeButton: true,
+            progressBar: true,
+            positionClass: "toast-top-right",
+            timeOut: 5000
+        };
+
+        // Cấu hình Google API
         const CLIENT_ID = '422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyCDAqPtdamfREUzrgK5f01mUPodtn-8ojY';
-        
-        // Google Fit API scopes
         const SCOPES = 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write';
-        
+
         let tokenClient;
         let gapiInited = false;
         let gisInited = false;
 
-        // Khởi tạo GAPI
+        // Utility functions
+        function showLoading() {
+            document.querySelector('.loading').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.querySelector('.loading').style.display = 'none';
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusAlert = document.getElementById('status-alert');
+            statusAlert.className = `alert alert-${type}`;
+            statusAlert.textContent = message;
+            statusAlert.classList.remove('d-none');
+        }
+
+        function formatDateTime(date) {
+            return new Intl.DateTimeFormat('vi-VN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            }).format(date);
+        }
+
+        // GAPI initialization
         function gapiLoaded() {
             gapi.load('client', initializeGapiClient);
         }
 
         async function initializeGapiClient() {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest'],
-            });
-            gapiInited = true;
-            maybeEnableButtons();
+            try {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest'],
+                });
+                gapiInited = true;
+                maybeEnableButtons();
+            } catch (err) {
+                toastr.error('Lỗi khởi tạo Google API');
+                console.error(err);
+            }
         }
 
-        // Khởi tạo Google Identity Services
         function gisLoaded() {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
-                callback: '', // Được định nghĩa sau
+                callback: '', // Defined later
             });
             gisInited = true;
             maybeEnableButtons();
@@ -99,19 +197,26 @@
 
         function maybeEnableButtons() {
             if (gapiInited && gisInited) {
-                document.getElementById('authorize_button').style.display = 'block';
+                document.getElementById('authorize_button').classList.remove('d-none');
             }
         }
 
-        // Xử lý đăng nhập
+        // Auth handling
         function handleAuthClick() {
+            showLoading();
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) {
+                    toastr.error('Lỗi xác thực');
+                    hideLoading();
                     throw (resp);
                 }
                 document.getElementById('authorize_button').classList.add('d-none');
                 document.getElementById('signout_button').classList.remove('d-none');
+                document.getElementById('refresh-btn').classList.remove('d-none');
                 await loadStepsData();
+                await loadStepsHistory();
+                hideLoading();
+                toastr.success('Đăng nhập thành công');
             };
 
             if (gapi.client.getToken() === null) {
@@ -121,7 +226,6 @@
             }
         }
 
-        // Xử lý đăng xuất
         function handleSignoutClick() {
             const token = gapi.client.getToken();
             if (token !== null) {
@@ -129,13 +233,17 @@
                 gapi.client.setToken('');
                 document.getElementById('authorize_button').classList.remove('d-none');
                 document.getElementById('signout_button').classList.add('d-none');
+                document.getElementById('refresh-btn').classList.add('d-none');
                 document.getElementById('steps-today').innerText = '--';
-                document.getElementById('steps-history').innerHTML = '';
+                document.getElementById('last-update').innerText = '--';
+                document.getElementById('steps-history').innerHTML = '<tr><td colspan="3" class="text-center">Chưa có dữ liệu</td></tr>';
+                toastr.info('Đã đăng xuất');
             }
         }
 
-        // Đọc dữ liệu bước chân
+        // Data operations
         async function loadStepsData() {
+            showLoading();
             try {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
@@ -157,20 +265,77 @@
                 });
 
                 const steps = response.result.bucket[0].dataset[0].point[0]?.value[0]?.intVal || 0;
-                document.getElementById('steps-today').innerText = steps;
-
+                document.getElementById('steps-today').innerText = steps.toLocaleString('vi-VN');
+                document.getElementById('last-update').innerText = formatDateTime(new Date());
+                toastr.success('Đã cập nhật dữ liệu bước chân');
             } catch (err) {
-                console.error('Error loading steps data:', err);
+                toastr.error('Lỗi tải dữ liệu bước chân');
+                console.error(err);
+            } finally {
+                hideLoading();
             }
         }
 
-        // Ghi dữ liệu bước chân
-        async function insertSteps(stepCount) {
+        async function loadStepsHistory() {
+            showLoading();
+            try {
+                const endDate = new Date();
+                endDate.setHours(23, 59, 59, 999);
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - 7);
+                startDate.setHours(0, 0, 0, 0);
+
+                const request = {
+                    aggregateBy: [{
+                        dataTypeName: 'com.google.step_count.delta',
+                    }],
+                    bucketByTime: { durationMillis: 86400000 },
+                    startTimeMillis: startDate.getTime(),
+                    endTimeMillis: endDate.getTime(),
+                };
+
+                const response = await gapi.client.fitness.users.dataset.aggregate({
+                    userId: 'me',
+                    resource: request
+                });
+
+                let historyHTML = '';
+                response.result.bucket.forEach(bucket => {
+                    const steps = bucket.dataset[0].point[0]?.value[0]?.intVal || 0;
+                    const date = new Date(parseInt(bucket.startTimeMillis));
+                    const calories = Math.round(steps * 0.04); // Ước tính đơn giản: 1 bước ~ 0.04 calo
+
+                    historyHTML += `
+                        <tr>
+                            <td>${formatDateTime(date)}</td>
+                            <td>${steps.toLocaleString('vi-VN')}</td>
+                            <td>${calories.toLocaleString('vi-VN')}</td>
+                        </tr>
+                    `;
+                });
+
+                document.getElementById('steps-history').innerHTML = historyHTML || '<tr><td colspan="3" class="text-center">Chưa có dữ liệu</td></tr>';
+            } catch (err) {
+                toastr.error('Lỗi tải lịch sử bước chân');
+                console.error(err);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function insertSteps(stepCount, activityTime) {
+            showLoading();
+            const startTimeMillis = new Date(activityTime).getTime();
+            const endTimeMillis = startTimeMillis + 60000; // Thêm 1 phút
+
             const dataSet = {
-                dataSourceId: 'raw:com.google.step_count.delta:app_name:web_app',
+                dataSourceId: 'raw:com.google.step_count.delta:com.example.fit:web_app',
+                minStartTimeNs: startTimeMillis * 1000000,
+                maxEndTimeNs: endTimeMillis * 1000000,
                 point: [{
-                    startTimeNanos: Date.now() * 1000000,
-                    endTimeNanos: (Date.now() * 1000000) + 1,
+                    startTimeNanos: startTimeMillis * 1000000,
+                    endTimeNanos: endTimeMillis * 1000000,
+                    dataTypeName: 'com.google.step_count.delta',
                     value: [{
                         intVal: stepCount
                     }]
@@ -181,28 +346,23 @@
                 await gapi.client.fitness.users.dataSources.datasets.patch({
                     userId: 'me',
                     dataSourceId: dataSet.dataSourceId,
-                    datasetId: `${dataSet.point[0].startTimeNanos}-${dataSet.point[0].endTimeNanos}`,
+                    datasetId: `${dataSet.minStartTimeNs}-${dataSet.maxEndTimeNs}`,
                     resource: dataSet
                 });
 
+                toastr.success('Đã thêm dữ liệu bước chân thành công');
                 await loadStepsData();
+                await loadStepsHistory();
             } catch (err) {
-                console.error('Error inserting steps:', err);
+                toastr.error('Lỗi khi thêm dữ liệu bước chân');
+                console.error(err);
+            } finally {
+                hideLoading();
             }
         }
 
         // Event listeners
-        document.getElementById('authorize_button').addEventListener('click', handleAuthClick);
-        document.getElementById('signout_button').addEventListener('click', handleSignoutClick);
-        document.getElementById('add-steps-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const steps = parseInt(document.getElementById('steps').value);
-            await insertSteps(steps);
-            document.getElementById('steps').value = '';
-        });
-    </script>
-
-    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
-</body>
-</html>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set default activity time to now
+            const now = new Date();
+            now.setMinutes(now.getMinutes() -</antArtifact>
