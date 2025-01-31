@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Theo dõi bước chân Google Fit</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">Theo dõi bước chân Google Fit</h1>
+        <button id="authorize_button" class="btn btn-primary mb-3" style="display: none;">Đăng nhập Google</button>
+        <button id="signout_button" class="btn btn-secondary mb-3" style="display: none;">Đăng xuất</button>
+        <div id="content" style="display: none;">
+            <h2>Số bước chân hôm nay: <span id="steps">0</span></h2>
+            <form id="add-steps-form" class="mt-3">
+                <div class="mb-3">
+                    <label for="steps-input" class="form-label">Thêm số bước chân:</label>
+                    <input type="number" class="form-control" id="steps-input" required>
+                </div>
+                <button type="submit" class="btn btn-success">Thêm bước chân</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const CLIENT_ID = 'YOUR_CLIENT_ID';
+        const API_KEY = 'YOUR_API_KEY';
+        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest';
+        const SCOPES = 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write';
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+
+        document.getElementById('authorize_button').style.display = 'none';
+        document.getElementById('signout_button').style.display = 'none';
+
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+
+        async function initializeGapiClient() {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: [DISCOVERY_DOC],
+            });
+            gapiInited = true;
+            maybeEnableButtons();
+        }
+
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: '', // defined later
+            });
+            gisInited = true;
+            maybeEnableButtons();
+        }
+
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                document.getElementById('authorize_button').style.display = 'inline-block';
+            }
+        }
+
+        function handleAuthClick() {
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    throw (resp);
+                }
+                document.getElementById('signout_button').style.display = 'inline-block';
+                document.getElementById('authorize_button').innerText = 'Refresh';
+                document.getElementById('content').style.display = 'block';
+                await getSteps();
+            };
+
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+
+        function handleSignoutClick() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+                document.getElementById('content').style.display = 'none';
+                document.getElementById('authorize_button').innerText = 'Đăng nhập Google';
+                document.getElementById('signout_button').style.display = 'none';
+            }
+        }
+
+        async function getSteps() {
+            const now = new Date();
+            const startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const endTime = now.getTime();
+
+            try {
+                const response = await gapi.client.fitness.users.dataset.aggregate({
+                    userId: 'me',
+                    aggregateBy: [{
+                        dataTypeName: 'com.google.step_count.delta',
+                        dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
+                    }],
+                    bucketByTime: { durationMillis: endTime - startTime },
+                    startTimeMillis: startTime,
+                    endTimeMillis: endTime
+                });
+
+                const steps = response.result.bucket[0].dataset[0].point[0]?.value[0]?.intVal || 0;
+                document.getElementById('steps').textContent = steps;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function addSteps(stepsToAdd) {
+            const now = new Date();
+            const endTime = now.getTime();
+            const startTime = endTime - 1000; // 1 second before end time
+
+            try {
+                await gapi.client.fitness.users.dataSources.datasets.patch({
+                    userId: 'me',
+                    dataSourceId: 'raw:com.google.step_count.delta:com.your.app.package_name:manual_entry',
+                    datasetId: `${startTime}-${endTime}`,
+                    resource: {
+                        dataSourceId: 'raw:com.google.step_count.delta:com.your.app.package_name:manual_entry',
+                        maxEndTimeNs: endTime * 1000000,
+                        minStartTimeNs: startTime * 1000000,
+                        point: [{
+                            dataTypeName: 'com.google.step_count.delta',
+                            endTimeNanos: endTime * 1000000,
+                            startTimeNanos: startTime * 1000000,
+                            value: [{intVal: stepsToAdd}]
+                        }]
+                    }
+                });
+                console.log('Steps added successfully');
+                await getSteps(); // Refresh step count
+            } catch (err) {
+                console.error('Error adding steps:', err);
+            }
+        }
+
+        document.getElementById('authorize_button').onclick = handleAuthClick;
+        document.getElementById('signout_button').onclick = handleSignoutClick;
+
+        document.getElementById('add-steps-form').onsubmit = async function(e) {
+            e.preventDefault();
+            const stepsInput = document.getElementById('steps-input');
+            const stepsToAdd = parseInt(stepsInput.value, 10);
+            if (stepsToAdd > 0) {
+                await addSteps(stepsToAdd);
+                stepsInput.value = '';
+            }
+        };
+
+        gapiLoaded();
+        gisLoaded();
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
