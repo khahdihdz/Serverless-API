@@ -3,136 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đếm Bước Chân - Google Fit</title>
+    <title>Theo dõi bước chân Google Fit</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            background: linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%);
-            min-height: 100vh;
-        }
-        .card {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        }
-        .step-circle {
-            width: 200px;
-            height: 200px;
-            border-radius: 50%;
-            background: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 20px auto;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            border: 8px solid #8ec5fc;
-        }
-        .btn-primary {
-            background: #8ec5fc;
-            border: none;
-            padding: 10px 30px;
-            border-radius: 25px;
-        }
-        .btn-primary:hover {
-            background: #7ab5fc;
-        }
-        #loginStatus {
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-        }
-        .loading {
-            display: none;
-            margin: 10px 0;
-        }
-    </style>
-    <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card p-4">
-                    <div class="card-body text-center">
-                        <h2 class="mb-4 text-primary">Theo Dõi Bước Chân</h2>
-                        
-                        <div id="loginStatus" class="alert alert-info">
-                            Chưa đăng nhập
-                        </div>
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1">Theo dõi bước chân Google Fit</span>
+            <button id="authorize_button" class="btn btn-light">Đăng nhập</button>
+            <button id="signout_button" class="btn btn-light d-none">Đăng xuất</button>
+        </div>
+    </nav>
 
-                        <div class="loading" id="loadingIndicator">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Đang xử lý...</span>
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Số bước chân hôm nay</h5>
+                    </div>
+                    <div class="card-body">
+                        <h2 id="steps-today">--</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Thêm bước chân mới</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="add-steps-form">
+                            <div class="mb-3">
+                                <label for="steps" class="form-label">Số bước</label>
+                                <input type="number" class="form-control" id="steps" required>
                             </div>
-                            <p>Đang xử lý...</p>
-                        </div>
+                            <button type="submit" class="btn btn-primary">Lưu</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                        <div class="step-circle">
-                            <div>
-                                <h3 id="stepCount">0</h3>
-                                <p class="mb-0">Bước chân</p>
-                            </div>
-                        </div>
-
-                        <div class="mb-4">
-                            <label class="form-label">Nhập số bước chân:</label>
-                            <input type="number" class="form-control form-control-lg text-center" id="stepInput" min="0">
-                        </div>
-
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-primary btn-lg mb-3" onclick="saveSteps()" id="saveButton" disabled>
-                                Lưu Số Bước Chân
-                            </button>
-                            <div id="googleFitBtn"></div>
-                            <button class="btn btn-outline-secondary btn-lg" onclick="readSteps()" id="readStepsBtn" style="display: none;">
-                                Đọc Số Bước Chân
-                            </button>
-                        </div>
-
-                        <div class="mt-4">
-                            <h4 class="text-primary">Lịch Sử</h4>
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Ngày</th>
-                                            <th>Số bước chân</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="historyTable">
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Lịch sử bước chân</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="steps-history"></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Client ID từ Google Cloud Console
         const CLIENT_ID = '422012132533-pgroo786kqrbdq8aj1b791erm4aic29l.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyCDAqPtdamfREUzrgK5f01mUPodtn-8ojY';
+        
+        // Google Fit API scopes
         const SCOPES = 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.activity.write';
-
+        
         let tokenClient;
-        let isAuthenticated = false;
         let gapiInited = false;
         let gisInited = false;
-
-        function showLoading(show) {
-            document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
-            document.getElementById('saveButton').disabled = show || !isAuthenticated;
-            document.getElementById('readStepsBtn').disabled = show;
-        }
-
-        function updateLoginStatus(status, isError = false) {
-            const statusElement = document.getElementById('loginStatus');
-            statusElement.textContent = status;
-            statusElement.className = `alert alert-${isError ? 'danger' : isAuthenticated ? 'success' : 'info'}`;
-        }
 
         // Khởi tạo GAPI
         function gapiLoaded() {
@@ -140,17 +78,12 @@
         }
 
         async function initializeGapiClient() {
-            try {
-                await gapi.client.init({
-                    apiKey: API_KEY,
-                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest']
-                });
-                gapiInited = true;
-                maybeEnableButtons();
-            } catch (error) {
-                console.error('Error initializing GAPI client:', error);
-                updateLoginStatus('Lỗi khởi tạo GAPI: ' + error.message, true);
-            }
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest'],
+            });
+            gapiInited = true;
+            maybeEnableButtons();
         }
 
         // Khởi tạo Google Identity Services
@@ -158,7 +91,7 @@
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
-                callback: handleAuthResponse
+                callback: '', // Được định nghĩa sau
             });
             gisInited = true;
             maybeEnableButtons();
@@ -166,62 +99,56 @@
 
         function maybeEnableButtons() {
             if (gapiInited && gisInited) {
-                const savedToken = sessionStorage.getItem('fit_access_token');
-                if (savedToken) {
-                    gapi.client.setToken({ access_token: savedToken });
-                    isAuthenticated = true;
-                    onAuthenticated();
-                }
+                document.getElementById('authorize_button').style.display = 'block';
             }
         }
 
-        function handleAuthResponse(response) {
-            if (response.error !== undefined) {
-                console.error('Auth error:', response);
-                updateLoginStatus('Lỗi xác thực: ' + response.error, true);
-                isAuthenticated = false;
-                return;
-            }
-
-            isAuthenticated = true;
-            sessionStorage.setItem('fit_access_token', response.access_token);
-            onAuthenticated();
-        }
-
-        async function onAuthenticated() {
-            updateLoginStatus('Đã đăng nhập thành công');
-            document.getElementById('saveButton').disabled = false;
-            document.getElementById('readStepsBtn').style.display = 'block';
-            await readSteps();
-        }
-
+        // Xử lý đăng nhập
         function handleAuthClick() {
-            if (!tokenClient) {
-                updateLoginStatus('Đang khởi tạo...', false);
-                return;
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    throw (resp);
+                }
+                document.getElementById('authorize_button').classList.add('d-none');
+                document.getElementById('signout_button').classList.remove('d-none');
+                await loadStepsData();
+            };
+
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
             }
-            tokenClient.requestAccessToken({ prompt: 'consent' });
         }
 
-        async function readSteps() {
-            if (!isAuthenticated) {
-                updateLoginStatus('Vui lòng đăng nhập trước', true);
-                return;
+        // Xử lý đăng xuất
+        function handleSignoutClick() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+                document.getElementById('authorize_button').classList.remove('d-none');
+                document.getElementById('signout_button').classList.add('d-none');
+                document.getElementById('steps-today').innerText = '--';
+                document.getElementById('steps-history').innerHTML = '';
             }
+        }
 
-            showLoading(true);
+        // Đọc dữ liệu bước chân
+        async function loadStepsData() {
             try {
-                const now = new Date();
-                const startTime = new Date();
-                startTime.setDate(now.getDate() - 7);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
 
                 const request = {
                     aggregateBy: [{
                         dataTypeName: 'com.google.step_count.delta',
                     }],
                     bucketByTime: { durationMillis: 86400000 },
-                    startTimeMillis: startTime.getTime(),
-                    endTimeMillis: now.getTime(),
+                    startTimeMillis: today.getTime(),
+                    endTimeMillis: tomorrow.getTime(),
                 };
 
                 const response = await gapi.client.fitness.users.dataset.aggregate({
@@ -229,143 +156,53 @@
                     resource: request
                 });
 
-                updateHistoryFromGoogleFit(response.result.bucket);
-            } catch (error) {
-                console.error('Error reading steps:', error);
-                if (error.status === 401) {
-                    isAuthenticated = false;
-                    sessionStorage.removeItem('fit_access_token');
-                    updateLoginStatus('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', true);
-                    document.getElementById('saveButton').disabled = true;
-                    document.getElementById('readStepsBtn').style.display = 'none';
-                } else {
-                    updateLoginStatus('Lỗi đọc dữ liệu: ' + error.message, true);
-                }
-            } finally {
-                showLoading(false);
+                const steps = response.result.bucket[0].dataset[0].point[0]?.value[0]?.intVal || 0;
+                document.getElementById('steps-today').innerText = steps;
+
+            } catch (err) {
+                console.error('Error loading steps data:', err);
             }
         }
 
-        async function saveSteps() {
-            const steps = document.getElementById('stepInput').value;
-            if (!steps) {
-                alert('Vui lòng nhập số bước chân!');
-                return;
-            }
+        // Ghi dữ liệu bước chân
+        async function insertSteps(stepCount) {
+            const dataSet = {
+                dataSourceId: 'raw:com.google.step_count.delta:app_name:web_app',
+                point: [{
+                    startTimeNanos: Date.now() * 1000000,
+                    endTimeNanos: (Date.now() * 1000000) + 1,
+                    value: [{
+                        intVal: stepCount
+                    }]
+                }]
+            };
 
-            if (!isAuthenticated) {
-                updateLoginStatus('Vui lòng đăng nhập trước', true);
-                return;
-            }
-
-            showLoading(true);
             try {
-                const endTime = new Date();
-                const startTime = new Date(endTime);
-                startTime.setMinutes(startTime.getMinutes() - 1);
-
-                const dataSource = {
-                    dataStreamName: 'myStepCounter',
-                    type: 'raw',
-                    application: { name: 'Step Counter App' },
-                    dataType: {
-                        name: 'com.google.step_count.delta',
-                        field: [{ name: 'steps', format: 'integer' }]
-                    }
-                };
-
-                let dataStreamId;
-                try {
-                    const response = await gapi.client.fitness.users.dataSources.create({
-                        userId: 'me',
-                        resource: dataSource
-                    });
-                    dataStreamId = response.result.dataStreamId;
-                } catch (error) {
-                    if (error.status === 409) {
-                        const listResponse = await gapi.client.fitness.users.dataSources.list({
-                            userId: 'me'
-                        });
-                        const existingSource = listResponse.result.dataSource.find(
-                            ds => ds.dataStreamName === 'myStepCounter'
-                        );
-                        dataStreamId = existingSource.dataStreamId;
-                    } else {
-                        throw error;
-                    }
-                }
-
-                const datasetId = `${startTime.getTime() * 1000000}-${endTime.getTime() * 1000000}`;
                 await gapi.client.fitness.users.dataSources.datasets.patch({
                     userId: 'me',
-                    dataSourceId: dataStreamId,
-                    datasetId: datasetId,
-                    resource: {
-                        dataSourceId: dataStreamId,
-                        maxEndTimeNs: endTime.getTime() * 1000000,
-                        minStartTimeNs: startTime.getTime() * 1000000,
-                        point: [{
-                            dataTypeName: 'com.google.step_count.delta',
-                            endTimeNanos: endTime.getTime() * 1000000,
-                            startTimeNanos: startTime.getTime() * 1000000,
-                            value: [{ intVal: parseInt(steps) }]
-                        }]
-                    }
+                    dataSourceId: dataSet.dataSourceId,
+                    datasetId: `${dataSet.point[0].startTimeNanos}-${dataSet.point[0].endTimeNanos}`,
+                    resource: dataSet
                 });
 
-                document.getElementById('stepCount').textContent = steps;
-                document.getElementById('stepInput').value = '';
-                alert('Đã lưu số bước chân thành công!');
-                await readSteps();
-            } catch (error) {
-                console.error('Error saving steps:', error);
-                if (error.status === 401) {
-                    isAuthenticated = false;
-                    sessionStorage.removeItem('fit_access_token');
-                    updateLoginStatus('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', true);
-                    document.getElementById('saveButton').disabled = true;
-                    document.getElementById('readStepsBtn').style.display = 'none';
-                } else {
-                    updateLoginStatus('Lỗi lưu dữ liệu: ' + error.message, true);
-                }
-            } finally {
-                showLoading(false);
+                await loadStepsData();
+            } catch (err) {
+                console.error('Error inserting steps:', err);
             }
         }
 
-        function updateHistoryFromGoogleFit(buckets) {
-            const historyTable = document.getElementById('historyTable');
-            historyTable.innerHTML = '';
-
-            buckets.forEach(bucket => {
-                if (bucket.dataset[0].point && bucket.dataset[0].point.length > 0) {
-                    const date = new Date(parseInt(bucket.startTimeMillis)).toLocaleDateString('vi-VN');
-                    const steps = bucket.dataset[0].point[0].value[0].intVal;
-
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${date}</td>
-                        <td>${steps}</td>
-                    `;
-                    historyTable.appendChild(row);
-                }
-            });
-        }
-
-        window.onload = function() {
-            gapiLoaded();
-            
-            const signInButton = document.createElement('button');
-            signInButton.textContent = 'Đăng nhập với Google';
-            signInButton.className = 'btn btn-primary btn-lg mb-3';
-            signInButton.onclick = handleAuthClick;
-            
-            const googleFitBtn = document.getElementById('googleFitBtn');
-            googleFitBtn.innerHTML = '';
-            googleFitBtn.appendChild(signInButton);
-            
-            gisLoaded();
-        };
+        // Event listeners
+        document.getElementById('authorize_button').addEventListener('click', handleAuthClick);
+        document.getElementById('signout_button').addEventListener('click', handleSignoutClick);
+        document.getElementById('add-steps-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const steps = parseInt(document.getElementById('steps').value);
+            await insertSteps(steps);
+            document.getElementById('steps').value = '';
+        });
     </script>
+
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </body>
 </html>
