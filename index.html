@@ -1,133 +1,355 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tạo AI Video Quảng Cáo từ Link Sản Phẩm</title>
-  <style>
-    body { font-family: Arial, sans-serif; text-align: center; background: #f9f9f9; }
-    input, button { padding: 10px; font-size: 16px; margin: 10px; }
-    img, video { max-width: 100%; margin-top: 10px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Theo dõi thời tiết</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #f5f6fa;
+        }
+
+        body {
+            background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
+            min-height: 100vh;
+        }
+
+        .weather-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            transition: transform 0.3s ease;
+        }
+
+        .weather-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .weather-icon {
+            width: 100px;
+            height: 100px;
+        }
+
+        .temperature {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .details-card {
+            background: var(--secondary-color);
+            border-radius: 15px;
+            padding: 15px;
+        }
+
+        .notification-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .forecast-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-  <h1>Tạo AI Video Quảng Cáo từ Link Sản Phẩm</h1>
-  <p>Nhập URL sản phẩm để tạo video:</p>
-  <input type="text" id="productUrl" placeholder="Nhập link sản phẩm">
-  <button onclick="fetchProductImage()">Lấy Ảnh & Tạo Video</button>
-  <div id="output"></div>
+    <div class="container py-5">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="text-center mb-4">Theo dõi thời tiết khu vực</h1>
+                <div class="d-flex justify-content-center mb-3">
+                    <div class="input-group w-50">
+                        <input type="text" id="location" class="form-control" placeholder="Nhập tên thành phố">
+                        <button class="btn btn-primary" onclick="updateLocation()">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-  <script>
-    async function fetchProductImage() {
-      const productUrl = document.getElementById("productUrl").value.trim();
-      if (!productUrl) {
-        alert("Vui lòng nhập link sản phẩm hợp lệ!");
-        return;
-      }
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="weather-card p-4">
+                    <div class="text-center">
+                        <img id="weather-icon" class="weather-icon mb-3" src="/api/placeholder/100/100" alt="Weather Icon">
+                        <h2 id="location-name" class="mb-3">Đang tải...</h2>
+                        <div class="temperature" id="temperature">--°C</div>
+                        <p class="description mb-0" id="description">-</p>
+                    </div>
+                </div>
+            </div>
 
-      document.getElementById("output").innerHTML = "<p>Đang lấy ảnh sản phẩm...</p>";
+            <div class="col-md-6 mb-4">
+                <div class="weather-card p-4">
+                    <h3 class="mb-4">Chi tiết thời tiết</h3>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <div class="details-card">
+                                <i class="fas fa-tint mb-2"></i>
+                                <h5>Độ ẩm</h5>
+                                <p id="humidity" class="mb-0">--%</p>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="details-card">
+                                <i class="fas fa-wind mb-2"></i>
+                                <h5>Tốc độ gió</h5>
+                                <p id="wind-speed" class="mb-0">-- m/s</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="details-card">
+                                <i class="fas fa-compress-arrows-alt mb-2"></i>
+                                <h5>Áp suất</h5>
+                                <p id="pressure" class="mb-0">-- hPa</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="details-card">
+                                <i class="fas fa-eye mb-2"></i>
+                                <h5>Tầm nhìn</h5>
+                                <p id="visibility" class="mb-0">-- km</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="details-card">
+                                <i class="fas fa-cloud-rain mb-2"></i>
+                                <h5>Tỷ lệ mưa</h5>
+                                <p id="rain" class="mb-0">--%</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="details-card">
+                                <i class="fas fa-snowflake mb-2"></i>
+                                <h5>Tỷ lệ tuyết</h5>
+                                <p id="snow" class="mb-0">--%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-      try {
-        // Gửi request đến server để lấy ảnh (bạn cần tạo API backend nếu CORS bị chặn)
-        const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(productUrl)}`);
-        const data = await response.json();
-        
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(data.contents, "text/html");
-        const imageElement = doc.querySelector("img"); // Lấy ảnh đầu tiên
-        const imageUrl = imageElement ? imageElement.src : null;
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="mb-4">Dự báo thời tiết 5 ngày</h3>
+                <div id="forecast" class="row"></div>
+            </div>
+        </div>
 
-        if (!imageUrl) {
-          document.getElementById("output").innerHTML = "<p>Không tìm thấy ảnh sản phẩm.</p>";
-          return;
-        }
+        <div class="row">
+            <div class="col-12">
+                <div class="weather-card p-4">
+                    <h3 class="mb-4">Cài đặt thông báo Telegram</h3>
+                    <div class="mb-3">
+                        <label for="bot-token" class="form-label">Bot Token</label>
+                        <input type="text" class="form-control" id="bot-token" placeholder="Nhập Bot Token">
+                    </div>
+                    <div class="mb-3">
+                        <label for="chat-id" class="form-label">Chat ID</label>
+                        <input type="text" class="form-control" id="chat-id" placeholder="Nhập Chat ID">
+                    </div>
+                    <button class="btn btn-primary" onclick="saveNotificationSettings()">
+                        Lưu cài đặt
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        document.getElementById("output").innerHTML = `<p>Ảnh sản phẩm:</p><img src="${imageUrl}" width="300">`;
+    <div class="notification-status" id="notification-status"></div>
 
-        generateVideo(imageUrl);
-      } catch (error) {
-        console.error("Lỗi khi lấy ảnh sản phẩm:", error);
-        document.getElementById("output").innerHTML = "<p>Lỗi khi lấy ảnh.</p>";
-      }
-    }
+    <script>
+        const OPENWEATHER_API_KEY = 'YOUR_API_KEY_HERE'; // Thay bằng API key của bạn
+        let currentCity = 'Hanoi';
+        let telegramSettings = {
+            botToken: '',
+            chatId: ''
+        };
 
-    async function generateVideo(imageUrl) {
-      const apiUrl = "https://api.runwayml.com/v1/image_to_video";
-      const payload = {
-        image_url: imageUrl,
-        duration: 10,
-        effect: "cinematic"
-      };
-
-      try {
-        document.getElementById("output").innerHTML += "<p>Đang tạo video...</p>";
-
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer key_90dc8799861e15d5eb35a1e204ddd76ebb792992290f6769074ae43b5886b9166eb25213d77a8f95e1ab897ce1c29f328a5e16eacf63547ba9baf1bb2fd52cfd"
-          },
-          body: JSON.stringify(payload)
+        // Load saved settings
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedSettings = localStorage.getItem('telegramSettings');
+            if (savedSettings) {
+                telegramSettings = JSON.parse(savedSettings);
+                document.getElementById('bot-token').value = telegramSettings.botToken;
+                document.getElementById('chat-id').value = telegramSettings.chatId;
+            }
+            
+            const savedCity = localStorage.getItem('currentCity');
+            if (savedCity) {
+                currentCity = savedCity;
+                document.getElementById('location').value = currentCity;
+            }
+            
+            updateWeather();
         });
 
-        if (!response.ok) throw new Error("Lỗi API: " + response.status);
-        const data = await response.json();
-        const videoUrl = data.video_url;
-
-        if (videoUrl) {
-          document.getElementById("output").innerHTML = `
-            <h2>Video Quảng Cáo:</h2>
-            <video controls autoplay>
-              <source src="${videoUrl}" type="video/mp4">
-              Trình duyệt không hỗ trợ video.
-            </video>
-          `;
-          animateOverlay();
-        } else {
-          document.getElementById("output").innerHTML = "<p>Không có kết quả.</p>";
-        }
-      } catch (error) {
-        console.error("Lỗi:", error);
-        document.getElementById("output").innerHTML = `<p>Lỗi: ${error.message}</p>`;
-      }
-    }
-
-    function animateOverlay() {
-      const video = document.querySelector("video");
-      if (!video) return;
-
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      document.getElementById("output").appendChild(canvas);
-
-      video.addEventListener("loadeddata", () => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-        let startTime = null;
-
-        function draw(timestamp) {
-          if (!startTime) startTime = timestamp;
-          const elapsed = timestamp - startTime;
-
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-          ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
-
-          ctx.fillStyle = "white";
-          ctx.font = "20px Arial";
-          ctx.fillText("AI Video Ads", 20 + (elapsed / 50) % canvas.width, canvas.height - 20);
-
-          if (!video.paused && !video.ended) {
-            requestAnimationFrame(draw);
-          }
+        function updateLocation() {
+            const newLocation = document.getElementById('location').value;
+            if (newLocation) {
+                currentCity = newLocation;
+                localStorage.setItem('currentCity', currentCity);
+                updateWeather();
+            }
         }
 
-        video.play();
-        requestAnimationFrame(draw);
-      });
-    }
-  </script>
+        async function updateWeather() {
+            try {
+                const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${currentCity}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=vi`);
+                const data = await response.json();
+
+                if (data.cod === 200) {
+                    document.getElementById('location-name').textContent = data.name;
+                    document.getElementById('temperature').textContent = `${Math.round(data.main.temp)}°C`;
+                    document.getElementById('description').textContent = data .weather[0].description;
+                    document.getElementById('humidity').textContent = `${data.main.humidity}%`;
+                    document.getElementById('wind-speed').textContent = `${data.wind.speed} m/s`;
+                    document.getElementById('pressure').textContent = `${data.main.pressure} hPa`;
+                    document.getElementById('visibility').textContent = `${(data.visibility / 1000).toFixed(1)} km`;
+                    document.getElementById('weather-icon').src = `https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png`;
+
+                    // Cập nhật tỷ lệ mưa và tuyết
+                    document.getElementById('rain').textContent = data.rain ? `${data.rain['1h'] || 0}%` : '0%';
+                    document.getElementById('snow').textContent = data.snow ? `${data.snow['1h'] || 0}%` : '0%';
+
+                    // Gửi thông báo nếu đã cấu hình
+                    if (telegramSettings.botToken && telegramSettings.chatId) {
+                        sendTelegramNotification(data);
+                    }
+
+                    // Cập nhật dự báo thời tiết 5 ngày
+                    updateForecast();
+                } else {
+                    showNotification('Không tìm thấy địa điểm', 'danger');
+                }
+            } catch (error) {
+                console.error('Error fetching weather data:', error);
+                showNotification('Lỗi khi cập nhật thời tiết', 'danger');
+            }
+        }
+
+        async function updateForecast() {
+            try {
+                const response = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${currentCity}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=vi`);
+                const data = await response.json();
+
+                if (data.cod === "200") {
+                    const forecastContainer = document.getElementById('forecast');
+                    forecastContainer.innerHTML = ''; // Xóa nội dung cũ
+
+                    // Lặp qua các dự báo và hiển thị
+                    for (let i = 0; i < data.list.length; i += 8) { // Mỗi 8 giờ
+                        const forecast = data.list[i];
+                        const date = new Date(forecast.dt * 1000);
+                        const day = date.toLocaleDateString('vi-VN', { weekday: 'long' });
+                        const temp = Math.round(forecast.main.temp);
+                        const description = forecast.weather[0].description;
+                        const icon = forecast.weather[0].icon;
+
+                        const forecastCard = `
+                            <div class="col-md-2 mb-3">
+                                <div class="forecast-card">
+                                    <h5>${day}</h5>
+                                    <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="Weather Icon">
+                                    <p>${temp}°C</p>
+                                    <p>${description}</p>
+                                </div>
+                            </div>
+                        `;
+                        forecastContainer.innerHTML += forecastCard;
+                    }
+                } else {
+                    showNotification('Không tìm thấy dự báo thời tiết', 'danger');
+                }
+            } catch (error) {
+                console.error('Error fetching forecast data:', error);
+                showNotification('Lỗi khi cập nhật dự báo thời tiết', 'danger');
+            }
+        }
+
+        function saveNotificationSettings() {
+            const botToken = document.getElementById('bot-token').value;
+            const chatId = document.getElementById('chat-id').value;
+
+            if (botToken && chatId) {
+                telegramSettings = { botToken, chatId };
+                localStorage.setItem('telegramSettings', JSON.stringify(telegramSettings));
+                showNotification('Đã lưu cài đặt thông báo', 'success');
+            } else {
+                showNotification('Vui lòng nhập đầy đủ thông tin', 'warning');
+            }
+        }
+
+        async function sendTelegramNotification(weatherData) {
+            const message = `
+🌡️ Thời tiết tại ${weatherData.name}:
+- Nhiệt độ: ${Math.round(weatherData.main.temp)}°C
+- Thời tiết: ${weatherData.weather[0].description}
+- Độ ẩm: ${weatherData.main.humidity}%
+- Gió: ${weatherData.wind.speed} m/s
+- Áp suất: ${weatherData.main.pressure} hPa
+- Tầm nhìn: ${(weatherData.visibility / 1000).toFixed(1)} km
+- Tỷ lệ mưa: ${weatherData.rain ? `${weatherData.rain['1h'] || 0}%` : '0%'}
+- Tỷ lệ tuyết: ${weatherData.snow ? `${weatherData.snow['1h'] || 0}%` : '0%'}
+
+⏰ Cập nhật: ${new Date().toLocaleString('vi-VN')}
+            `;
+
+            try {
+                const response = await fetch(`https://api.telegram.org/bot${telegramSettings.botToken}/sendMessage`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        chat_id: telegramSettings.chatId,
+                        text: message,
+                        parse_mode: 'HTML'
+                    })
+                });
+
+                const data = await response.json();
+                if (!data.ok) {
+                    throw new Error('Failed to send Telegram notification');
+                }
+            } catch (error) {
+                console.error('Error sending Telegram notification:', error);
+                showNotification('Lỗi khi gửi thông báo Telegram', 'danger');
+            }
+        }
+
+        function showNotification(message, type) {
+            const notificationElement = document.getElementById('notification-status');
+            notificationElement.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            `;
+            setTimeout(() => {
+                const alert = notificationElement.querySelector('.alert');
+                if (alert) {
+                    alert.remove();
+                }
+            }, 5000);
+        }
+
+        // Update weather every 10 minutes
+        setInterval(updateWeather, 600000);
+    </script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
