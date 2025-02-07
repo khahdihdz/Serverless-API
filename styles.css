@@ -10,6 +10,23 @@ h2 {
     color: #007bff;
 }
 
-footer {
+.bold-row {
+    font-weight: bold;
+}
+
+.gold-table {
+    margin: 20px auto;
+    border-collapse: collapse;
+    width: 80%;
+}
+
+.gold-table th, .gold-table td {
+    border: 1px solid #007bff;
+    padding: 10px;
+}
+
+.update-time {
+    margin-top: 10px;
+    font-style: italic;
     color: #6c757d;
 }
