@@ -8,7 +8,7 @@ async function fetchGoldPrice() {
         const doc = parser.parseFromString(text, 'text/html');
         
         // Giả sử giá vàng nằm trong một thẻ cụ thể, bạn cần điều chỉnh selector cho phù hợp
-        const priceElement = doc.querySelector('.gold-price'); // Thay đổi '.price-selector' thành selector thực tế
+        const priceElement = doc.querySelector('.11'); // Thay đổi '.price-selector' thành selector thực tế
         const price = priceElement ? priceElement.textContent : 'Không tìm thấy giá';
 
         document.getElementById('price').textContent = price;
