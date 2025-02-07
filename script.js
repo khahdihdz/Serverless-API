@@ -1,51 +1,25 @@
-async function addSteps() {
-    const steps = document.getElementById("stepsInput").value;
-    if (!steps || steps <= 0) {
-        alert("Vui lòng nhập số bước hợp lệ!");
-        return;
-    }
-
-    const authInstance = gapi.auth2.getAuthInstance();
-    if (!authInstance || !authInstance.isSignedIn.get()) {
-        alert("Vui lòng đăng nhập Google trước!");
-        return;
-    }
-
-    const accessToken = authInstance.currentUser.get().getAuthResponse().access_token;
-
-    const requestBody = {
-        dataSourceId: "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps",
-        maxEndTimeNs: Date.now() * 1e6,
-        minStartTimeNs: (Date.now() - 60000) * 1e6,
-        point: [{
-            value: [{ intVal: parseInt(steps) }],
-            dataTypeName: "com.google.step_count.delta"
-        }]
-    };
-
+async function fetchGoldPrice() {
     try {
-        const response = await fetch(
-            "https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:estimated_steps/datasets",
-            {
-                method: "PUT",
-                headers: {
-                    "Authorization": `Bearer ${accessToken}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(requestBody)
-            }
-        );
+        const response = await fetch('https://hite.vn/hhhh/vangdainghianh/');
+        const text = await response.text();
+        
+        // Sử dụng DOMParser để phân tích HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        
+        // Giả sử giá vàng nằm trong một thẻ cụ thể, bạn cần điều chỉnh selector cho phù hợp
+        const priceElement = doc.querySelector('.gold-price'); // Thay đổi '.price-selector' thành selector thực tế
+        const price = priceElement ? priceElement.textContent : 'Không tìm thấy giá';
 
-        if (response.ok) {
-            alert("Cập nhật bước chân thành công!");
-            document.getElementById("historyList").innerHTML += `<li class="list-group-item">${steps} bước</li>`;
-        } else {
-            const errorData = await response.json();
-            console.error("Lỗi cập nhật:", errorData);
-            alert("Lỗi cập nhật dữ liệu! Hãy kiểm tra quyền API.");
-        }
+        document.getElementById('price').textContent = price;
     } catch (error) {
-        console.error("Lỗi mạng:", error);
-        alert("Không thể kết nối đến Google Fit API!");
+        console.error('Lỗi khi lấy giá vàng:', error);
+        document.getElementById('price').textContent = 'Lỗi khi tải giá vàng';
     }
 }
+
+// Gọi hàm để lấy giá vàng khi trang được tải
+window.onload = function() {
+    fetchGoldPrice(); // Lần đầu tiên khi tải trang
+    setInterval(fetchGoldPrice, 60000); // Cập nhật mỗi 60 giây (60000 ms)
+};
