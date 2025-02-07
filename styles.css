@@ -1,6 +1,15 @@
 body {
-    background-color: #f4f4f4;
+    background-color: #f8f9fa;
 }
+
 h1 {
-    color: #2c3e50;
+    color: #ffcc00;
+}
+
+h2 {
+    color: #007bff;
+}
+
+footer {
+    color: #6c757d;
 }
