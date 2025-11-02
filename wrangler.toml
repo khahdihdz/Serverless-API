@@ -1,39 +1,3 @@
-// Hàm để tạo và thêm các dòng vào bảng
-function addRowToTable(table, rowData, isBold) {
-    var row = table.insertRow();
-    for (var i = 0; i < rowData.length; i++) {
-        var cell = row.insertCell(i);
-        cell.innerHTML = rowData[i];
-        // Thêm lớp class selector nếu dòng cần in đậm
-        if (isBold) {
-            row.classList.add("bold-row");
-        }
-    }
-}
-
-// Hàm để xử lý nội dung XML và trình bày trên bảng HTML
-function processXML(xmlContent) {
-    var parser = new DOMParser();
-    var xmlDoc = parser.parseFromString(xmlContent, "text/xml");
-
-    // Tạo bảng HTML
-    var table = document.createElement("table");
-    table.classList.add("gold-table");
-
-    // Thêm tiêu đề cho bảng
-    var headerData = ["Giá vàng trong nước", "Mua", "Bán"];
-    addRowToTable(table, headerData, true);
-
-    // Lấy thông tin từ XML và thêm vào bảng
-    var rows = xmlDoc.getElementsByTagName("Row");
-    for (var i = 0; i < rows.length; i++) {
-        var name = rows[i].getAttribute("Name");
-        var buy = parseFloat(rows[i].getAttribute("Buy").replace(',', '')) * 1000;
-        var sell = parseFloat(rows[i].getAttribute("Sell").replace(',', '')) * 1000;
-        var rowData = [name, formatNumber(buy), formatNumber(sell)];
-        addRowToTable(table, rowData, false);
-    }
-
     // Thêm bảng vào thẻ có id là "goldTable" trên trang HTML
     document.getElementById("goldTable").appendChild(table);
 
